@@ -8,7 +8,7 @@
  *   La rúbrica exige un "log de errores". Este archivo lo implementa
  *   con el formato:
  *
- *      [2026-10-15 21:30:00] ERROR  · NO_PREVISTO · mensaje · detalle
+ *      [2026-10-15 21:30:00] ERROR  - NO_PREVISTO - mensaje - detalle
  *
  *   Niveles usados (de menor a mayor gravedad):
  *      info    -> algo normal que vale la pena saber (arranque, login)
@@ -97,7 +97,7 @@ function formatearDetalle(detalle) {
 /**
  * Registra un evento en el log con el formato oficial.
  *
- *   [fecha] NIVEL · mensaje · detalle
+ *   [fecha] NIVEL - mensaje - detalle
  *
  * @param {'info'|'aviso'|'error'} nivel
  * @param {string} mensaje    Que paso, en corto
@@ -109,8 +109,8 @@ function registrar(nivel, mensaje, detalle) {
 
   const linea =
     `${COLOR.gris}[${fechaActual()}]${COLOR.reinicio} ` +
-    `${color}${etiqueta}${COLOR.reinicio} · ` +
-    `${mensaje} · ` +
+    `${color}${etiqueta}${COLOR.reinicio} - ` +
+    `${mensaje} - ` +
     `${COLOR.gris}${formatearDetalle(detalle)}${COLOR.reinicio}`;
 
   // console.error va al flujo STDERR (el de los errores), lo cual es

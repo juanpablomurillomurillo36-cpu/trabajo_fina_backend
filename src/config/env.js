@@ -22,8 +22,11 @@ const path = require('node:path');
 
 // dotenv lee el archivo .env y copia su contenido a process.env.
 // Indicamos la ruta explicita para que funcione desde cualquier carpeta.
+// `quiet: true` silencia el aviso "injected env (...)" que dotenv
+// imprime en stderr; esa linea solo ensucia el log del servidor.
 require('dotenv').config({
-  path: path.resolve(__dirname, '..', '..', '.env')
+  path: path.resolve(__dirname, '..', '..', '.env'),
+  quiet: true
 });
 
 // ---------------------------------------------------------------------
