@@ -1,0 +1,74 @@
+# =====================================================================
+# .gitignore
+# ---------------------------------------------------------------------
+# Archivo que le dice a GIT que NO debe subir al repositorio.
+#
+# POR QUE EXISTE?
+#   1. .env contiene CONTRASENAS reales (la clave de MySQL, el secreto
+#      del JWT). Si se sube, cualquiera que clone el repo las lee.
+#      La rúbrica lo prohíbe expresamente en la entrega.
+#   2. node_modules/ pesa cientos de megas y se regenera solo con
+#      `npm install`. No tiene sentido versionarlo.
+#
+# COMO FUNCIONA?
+#   Cada linea es un patron. Git ignora cualquier archivo o carpeta que
+#   coincida. El signo / al final significa "solo carpetas".
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# DEPENDENCIAS
+# ---------------------------------------------------------------------
+# Se regenera con `npm install`, por eso no se versiona.
+node_modules/
+
+# ---------------------------------------------------------------------
+# SECRETOS Y ENTORNO
+# ---------------------------------------------------------------------
+# .env contiene las contraseñas reales. SIEMPRE se ignora.
+# .env.example es la plantilla SIN secretos y SI se versiona.
+.env
+.env.local
+.env.*.local
+
+# ---------------------------------------------------------------------
+# NO PARTE DEL ENTREGABLE
+# ---------------------------------------------------------------------
+# La rúbrica define el repo asi: src/, database/, docs/, README.md,
+# .env.example, package.json. Todo lo demas se excluye.
+#
+# NOTA: los archivos de abajo quedan FUERA de la raiz del repo
+# (discoteca-api/) asi que Git ni siquiera los ve. Se listan aqui como
+# documentacion y como proteccion por si la carpeta se mueve.
+PLAN-TRABAJO.md
+proyectoinfo/
+parametrization/
+
+# Documentos de oficina y material de la parametrización.
+*.docx
+*.xlsx
+*.pdf
+
+# ---------------------------------------------------------------------
+# LOGS Y ARCHIVOS TEMPORALES
+# ---------------------------------------------------------------------
+*.log
+npm-debug.log*
+
+# ---------------------------------------------------------------------
+# SISTEMA OPERATIVO
+# ---------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------
+# EDITORES
+# ---------------------------------------------------------------------
+.vscode/
+.idea/
+
+# ---------------------------------------------------------------------
+# COBERTURA Y REPORTES DE PRUEBAS
+# ---------------------------------------------------------------------
+coverage/
+.nyc_output/
