@@ -1,6 +1,6 @@
 # CAMBIOS DE LA BASE DE DATOS — vs EVIDENCIA 1
 
-> **Documento obligatorio de la rúbrica** (`database/ CAMBIOS.md`).
+> **Documento obligatorio de la rúbrica** (`database/CAMBIOS.md`).
 > Registra **cada cambio** que se le hace al esquema de la Evidencia 1,
 > con su **SQL** y su **justificación**.
 
@@ -15,8 +15,20 @@
 | Método de copia | `mysqldump` → `mysql` |
 | Tablas | 26 |
 | Claves foráneas | 27 |
-| Índices únicos | 10 |
+| Índices únicos (sin PK) | 10 |
 | Codificación | `utf8mb4_spanish_ci` |
+
+### Estado actual de `discoteca_api` (tras los cambios de la Fase 10)
+
+| Ítem | Antes | Después |
+|---|---|---|
+| Tablas | 26 | **27** |
+| Claves foráneas | 27 | **28** |
+| Índices únicos (sin PK) | 10 | **11** |
+
+> Se puede reconstruir la base **desde cero** con:
+> `mysql -u root -p < database/01_schema.sql`
+> Verificado: la reconstrucción devuelve 27 tablas / 28 FK / 11 índices únicos.
 
 ### Diferencias del esquema real vs el script de parametrización
 
@@ -38,12 +50,123 @@ El esquema `discoteca_api` (heredado de `discoteca_db`) difiere del script
 
 ## 2. CAMBIOS APLICADOS
 
-_Aquí se registra cada cambio real que se ejecute sobre `discoteca_api`._
-_Cuando se agregue una fila, se indica: número, fecha, qué, SQL y por qué._
+### C-01 — Tabla `bitacora` · ✅ aplicado (Fase 10) · **Criterio C8**
 
-| # | Fecha | Cambio | SQL | Justificación (criterio) | Estado |
-|---|---|---|---|---|---|
-| — | — | _Sin cambios aplicados aún_ | — | — | — |
+**Qué:** tabla que registra **quién hizo qué y cuándo** sobre los registros
+importantes (creación, edición, anulación).
+
+**Por qué:** el criterio **C8 (RNF backend)** exige explícitamente **bitácora**.
+Complementa la tabla `accesos` (que solo audita *sesiones*: login/logout) con la
+auditoría de *datos*: quién creó o anuló una venta, una compra, un rol, un usuario.
+
+**SQL ejecutado:**
+
+```sql
+CREATE TABLE bitacora (
+  id_bitacora   INT          NOT NULL AUTO_INCREMENT,
+  id_usuario    INT          NOT NULL,
+  tabla         VARCHAR(64)  NOT NULL COMMENT 'Tabla afectada',
+  id_registro   INT          NULL     COMMENT 'Id del registro afectado; sin FK porque apunta a distintas tablas',
+  accion        ENUM('CREACION','EDICION','ANULACION') NOT NULL,
+  detalle       TEXT         NULL     COMMENT 'Resumen legible del cambio',
+  direccion_ip  VARCHAR(45)  NULL     COMMENT 'IPv4 o IPv6 de quien ejecuto la accion',
+  fecha_hora    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id_bitacora),
+  KEY idx_bitacora_usuario (id_usuario),
+  KEY idx_bitacora_fecha (fecha_hora),
+  KEY idx_bitacora_registro (tabla, id_registro),
+  CONSTRAINT fk_bitacora_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+```
+
+**Ajustes respecto al SQL planeado (sección 3) y por qué:**
+
+| Planeado | Ejecutado | Motivo |
+|---|---|---|
+| `USUARIO_id` | `id_usuario` | Las 26 tablas nombran la FK como `id_<tabla>`, no `TABLA_id` |
+| `fecha` | `fecha_hora` | Convención `fecha_<suceso>`; además coincide con `accesos.fecha_hora` |
+| PK en línea | `PRIMARY KEY` aparte | Forma estándar del volcado de MySQL |
+| — | `idx_bitacora_fecha`, `idx_bitacora_registro` | Consultas típicas: "actividad reciente" y "historial de un registro" (C5) |
+| — | `COMMENT` en columnas | La propia base documenta que `id_registro` no tiene FK por ser polimórfico |
+
+**Decisiones de diseño:**
+- `ON DELETE RESTRICT`: no se puede borrar un usuario que tenga auditoría.
+- Sin `id_registro` con FK: apunta a distintas tablas (polimórfico), por eso lleva
+  su propio índice compuesto `(tabla, id_registro)` en vez de clave foránea.
+- `accion` solo admite `CREACION/EDICION/ANULACION` porque el esquema trabaja con
+  **borrado lógico** (`estado='inactivo'`, `estado='anulada'`): no hay DELETE real.
+
+---
+
+### C-02 — Revisión de índices y claves foráneas · ✅ aplicado (Fase 10) · **Criterio C5**
+
+**Qué:** revisión completa de cobertura de índices.
+
+**Resultados de la revisión:**
+
+| Revisión | Resultado |
+|---|---|
+| Claves foráneas sin índice | **0 de 27** — todas están indexadas |
+| Índices únicos existentes | 10 (antes de la Fase 10) |
+| Tablas candidatas a índice único | `categoria_empleado`, `productos`, `servicios`, `categoria_clientes`, `compras`, `evento` |
+
+**SQL ejecutado:**
+
+```sql
+ALTER TABLE categoria_empleado
+  ADD UNIQUE KEY uq_categoria_empleado_nombre (nombre);
+```
+
+**Por qué SOLO `categoria_empleado`:**
+
+- ✅ `categoria_empleado.nombre` es un `ENUM('DJ','mesero','ingreso','administrativo')`
+  con solo 4 valores posibles: nunca se quiere una fila `DJ` duplicada. El índice es
+  inequívoco y **seguro**.
+- ⛔ `productos`, `servicios` y `categoria_clientes` tienen **borrado lógico**
+  (`estado='inactivo'`). Un `UNIQUE(nombre)` simple impediría volver a crear un
+  registro con un nombre que ya fue desactivado (el índice lo seguiría bloqueando
+  porque la fila inactiva sigue existiendo). Su duplicado se controla en la capa de
+  **servicio**, con el patrón del ejemplo del profesor (`SELECT 1 AS existe` → `409`),
+  que solo compara entre registros **activos**.
+- ⛔ `compras` no tiene columna folio/comprobante (solo `ventas` tiene
+  `uq_ventas_comprobante`), y `evento` sí debe permitir repetir nombre en fechas
+  distintas (ciclo semanal).
+
+**Pendiente futuro:** si se agrega una columna de folio a `compras` o un SKU a
+`productos`, revisar aquí su índice único.
+
+---
+
+### C-04 — Usuario de aplicación con mínimo privilegio · ✅ aplicado (Fase 10) · **Criterio C8**
+
+**Qué:** se creó el usuario MySQL que usa la API para conectarse, en lugar de
+conectar como `root`. Archivo: `database/02_usuario_app.sql` (`npm run db:user`).
+
+**Por qué:** principio de mínimo privilegio. `root` puede borrar bases enteras;
+la aplicación solo necesita DML.
+
+**SQL ejecutado (resumen):**
+
+```sql
+CREATE USER IF NOT EXISTS 'discoteca_app'@'localhost' IDENTIFIED BY 'DiscotecaApp2026';
+ALTER USER 'discoteca_app'@'localhost' IDENTIFIED BY 'DiscotecaApp2026';
+GRANT SELECT, INSERT, UPDATE, DELETE ON discoteca_api.* TO 'discoteca_app'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+**Verificación realizada:**
+
+| Prueba | Resultado |
+|---|---|
+| `CREATE TABLE` como `discoteca_app` | ❌ denegado (ERROR 1142) — correcto |
+| `INSERT` en `bitacora` | ✅ concedido (falló solo por clave foránea, no por permiso) |
+| Arranque de la API con este usuario | ✅ `GET /api/salud` → 200 |
+| Privilegios sobrantes detectados | Se revocó un grant colgante `ALL ON discoteca.*` (esa base no existe) |
+
+**Archivos tocados:** `database/02_usuario_app.sql` (nuevo), `.env` y
+`.env.example` ahora apuntan a `discoteca_app`.
 
 ---
 
@@ -51,43 +174,13 @@ _Cuando se agregue una fila, se indica: número, fecha, qué, SQL y por qué._
 
 ### C-01 — Crear tabla `bitacora` · **Fase 10** · **Criterio C8**
 
-**Qué:** una tabla que registre **quién hizo qué y cuándo** sobre los registros
-importantes (creación, edición, anulación).
-
-**Por qué:** el criterio **C8 (RNF backend)** exige explícitamente **bitácora**.
-Además es una buena práctica: sin ella no se puede auditar quién borró una venta
-o quién cambió el estado de una compra.
-
-**SQL planeado:**
-
-```sql
-CREATE TABLE bitacora (
-  id_bitacora   INT AUTO_INCREMENT PRIMARY KEY,
-  USUARIO_id    INT            NOT NULL,
-  tabla         VARCHAR(64)    NOT NULL,
-  registro_id   INT            NULL,
-  accion        ENUM('CREACION','EDICION','ANULACION') NOT NULL,
-  detalle       TEXT           NULL,
-  direccion_ip  VARCHAR(45)    NULL,
-  fecha         DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_bitacora_usuario
-    FOREIGN KEY (USUARIO_id) REFERENCES usuarios(id_usuario)
-    ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
-```
-
-**Estado:** ⏳ pendiente (se ejecuta en la Fase 10 junto al `01_schema.sql`).
+**Estado:** ✅ **aplicado** — ver sección 2 (con los ajustes de convención explicados).
 
 ---
 
 ### C-02 — Revisar índices y claves foráneas · **Fase 10** · **Criterio C5**
 
-**Qué:** si al modelar los servicios se detecta una columna que debería tener
-índice único o una FK faltante, se agrega aquí.
-
-**Por qué:** el criterio **C5** valora el acceso a datos correcto e indexado.
-
-**Estado:** ⏳ pendiente (se revisa cuando se implementen los repositories).
+**Estado:** ✅ **aplicado** — ver sección 2 (27/27 FK indexadas + `uq_categoria_empleado_nombre`).
 
 ---
 
@@ -111,3 +204,7 @@ Cuando se ejecute un cambio real sobre la base de datos:
    **criterio de la rúbrica** que lo justifica.
 3. Marcar el estado como `✅ aplicado`.
 4. Si el cambio fue una tabla nueva, listarlo también en el **README** (sección de tablas).
+5. Regenerar `database/01_schema.sql` si el cambio fue de esquema:
+   ```
+   mysqldump -u root -p --no-data --databases discoteca_api --set-gtid-purged=OFF --skip-dump-date > database/01_schema.sql
+   ```
