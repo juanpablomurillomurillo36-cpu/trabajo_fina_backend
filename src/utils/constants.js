@@ -164,6 +164,7 @@ const LIMITES = Object.freeze({
 
   // Longitudes de texto (coinciden con los VARCHAR de la base).
   VARCHAR_CORTO: 45,
+  VARCHAR_ROL: 50,
   VARCHAR_MEDIO: 80,
   VARCHAR_LARGO: 120,
   VARCHAR_DESCRIPCION: 255

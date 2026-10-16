@@ -36,6 +36,7 @@ const { registrarAviso } = require('../middleware/logger');
 // proyecto consiste en una linea nueva.
 const rutaSalud = require('../routes/salud.routes');
 const rutaPermiso = require('../routes/permiso.routes');
+const rutaRol = require('../routes/rol.routes');
 
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
@@ -104,6 +105,10 @@ function crearAplicacion() {
 
   // CRUD de permisos: la PRIMERA entidad con las 4 capas completas.
   app.use('/api/permisos', rutaPermiso);
+
+  // CRUD de roles. A partir de aqui cada entidad nueva solo agrega
+  // dos lineas: el require de arriba y este montaje.
+  app.use('/api/roles', rutaRol);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

@@ -25,7 +25,7 @@ const formato = require('../utils/formato');
 const { ColectorErrores } = require('../utils/validadores');
 const { LIMITES, ESTADO } = require('../utils/constants');
 const { Permiso } = require('../models');
-const permisoRepository = require('../repositories/permisoRepository');
+const permisoRepository = require('../repositories/PermisoRepository');
 
 // Lista blanca de campos que el cliente puede enviar.
 // Cualquier otra llave del cuerpo (id, fechaCreacion, usuarioAdmin...)
