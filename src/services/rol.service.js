@@ -26,8 +26,8 @@ const formato = require('../utils/formato');
 const { ColectorErrores } = require('../utils/validadores');
 const { LIMITES, ESTADO } = require('../utils/constants');
 const { Rol } = require('../models');
-const rolRepository = require('../repositories/RolRepository');
-const rolPermisoRepository = require('../repositories/RolPermisoRepository');
+const rolRepository = require('../repositories/rolRepository');
+const rolPermisoRepository = require('../repositories/rolPermisoRepository');
 
 // Lista blanca: cualquier otra llave del cuerpo se descarta antes de
 // validar (evita que un cliente mande id o fechaCreacion y los "peguen").
@@ -187,6 +187,71 @@ class RolService {
       nombreRol: rol.nombreRol,
       usuariosAsignados
     };
+  }
+
+  /**
+   * ASIGNAR UN PERMISO A UN ROL.
+   *
+   * Valida que el permiso existe, lo asigna en la tabla puente y
+   * asegura que el rol quede con al menos un permiso (409 si no).
+   *
+   * @param {number} idRol
+   * @param {number} idPermiso
+   * @returns {Promise<{success: boolean, totalPermisos: number}>}
+   * @throws {AppError} 404 si el permiso no existe, 409 si el rol
+   *   quedaria sin permisos.
+   */
+  async asignarPermisoARol(idRol, idPermiso) {
+    // 1. Validar que el permiso existe en la base de datos
+    const existe = await rolPermisoRepository.existePermiso(idPermiso);
+    if (!existe) {
+      throw AppError.noEncontrado(MENSAJES.NEGOCIO.PERMISO_NO_EXISTE);
+    }
+
+    // 2. Asignar en la tabla puente (INSERT ... ON DUPLICATE KEY UPDATE)
+    const asignado = await rolPermisoRepository.asignarPermisoARol(idRol, idPermiso);
+    if (!asignado) {
+      throw AppError.interno('No se pudo asignar el permiso');
+    }
+
+    // 3. Verificar que el rol no quede sin permisos (defensiva)
+    const permisos = await rolPermisoRepository.listarPermisosDeRol(idRol);
+    if (permisos.length === 0) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.ROL_SIN_PERMISOS, [
+        { campo: 'permisos', mensaje: 'El rol debe tener al menos un permiso.' }
+      ]);
+    }
+
+    return { success: true, totalPermisos: permisos.length };
+  }
+
+  /**
+   * QUIETAR UN PERMISO DE UN ROL.
+   *
+   * Si al quitar este permiso el rol quedaria sin ningun permiso,
+   * la operacion falla y devuelve 409 ROL_SIN_PERMISOS.
+   *
+   * @param {number} idRol
+   * @param {number} idPermiso
+   * @returns {Promise<Permiso[]>} los permisos restantes del rol
+   * @throws {AppError} 404 si el permiso no estaba asignado al rol,
+   *   409 si el rol quede sin permisos.
+   */
+  async quitarPermisoDeRol(idRol, idPermiso) {
+    const quitado = await rolPermisoRepository.quitarPermisoDeRol(idRol, idPermiso);
+    if (!quitado) {
+      throw AppError.notFound(MENSAJES.NEGOCIO.PERMISO_NO_EXISTE);
+    }
+
+    // Verificar que el rol todavia tiene permisos
+    const permisos = await rolPermisoRepository.listarPermisosDeRol(idRol);
+    if (permisos.length === 0) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.ROL_SIN_PERMISOS, [
+        { campo: 'permisos', mensaje: 'El rol debe tener al menos un permiso.' }
+      ]);
+    }
+
+    return permisos;
   }
 
   // ==================================================================
