@@ -166,7 +166,7 @@ const LIMITES = Object.freeze({
   VARCHAR_CORTO: 45,
   VARCHAR_MEDIO: 80,
   VARCHAR_LARGO: 120,
-  TEXTURA_DESCRIPCION: 255
+  VARCHAR_DESCRIPCION: 255
 });
 
 // ---------------------------------------------------------------------

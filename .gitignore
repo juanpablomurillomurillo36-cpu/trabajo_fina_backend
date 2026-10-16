@@ -54,6 +54,10 @@ parametrization/
 *.log
 npm-debug.log*
 
+# Archivo temporal con el PID del servidor que queda en ejecucion
+# durante las pruebas manuales. Solo existe mientras se prueba.
+*.pid
+
 # ---------------------------------------------------------------------
 # SISTEMA OPERATIVO
 # ---------------------------------------------------------------------

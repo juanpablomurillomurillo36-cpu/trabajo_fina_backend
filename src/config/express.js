@@ -35,6 +35,7 @@ const { registrarAviso } = require('../middleware/logger');
 // Cada modulo de rutas se monta aqui. Agregar una parte nueva del
 // proyecto consiste en una linea nueva.
 const rutaSalud = require('../routes/salud.routes');
+const rutaPermiso = require('../routes/permiso.routes');
 
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
@@ -100,6 +101,9 @@ function crearAplicacion() {
   // Todas se montan bajo /api para que quede claro que es un backend
   // y no sirva paginas HTML.
   app.use('/api/salud', rutaSalud);
+
+  // CRUD de permisos: la PRIMERA entidad con las 4 capas completas.
+  app.use('/api/permisos', rutaPermiso);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

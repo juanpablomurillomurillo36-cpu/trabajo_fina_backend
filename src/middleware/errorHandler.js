@@ -88,6 +88,17 @@ function manejadorErrores(err, req, res, next) {
   // manejador de errores.
   if (typeof next !== 'function') return;
 
+  // ---- Caso 0: errores que SABEMOS traducir a un AppError ----
+  // Se convierten ANTES de decidir, para que sigan el mismo camino de
+  // respuesta (y el mismo formato de logueo) que cualquier otro error
+  // de la aplicacion. Sin esta normalizacion, un JSON mal formado
+  // llegaria como 500 "inesperado" y el cliente no sabria que EL fue
+  // quien mando mal la peticion.
+  const errorTraducido = interpretarErrorCuerpoJson(err);
+  if (errorTraducido !== null) {
+    err = errorTraducido;
+  }
+
   // ---- Caso 1: error de la aplicacion (AppError) ----
   if (err instanceof AppError) {
     // Los 4xx son esperados (el cliente mando algo mal): se loguea en
@@ -122,6 +133,33 @@ function manejadorErrores(err, req, res, next) {
   });
 
   return respuesta.fallo(res, AppError.interno(MENSAJES.SISTEMA.ERROR_INTERNO));
+}
+
+/**
+ * Detecta el error que lanza body-parser cuando el cuerpo NO es JSON
+ * valido (llaves sin comillas, coma final, texto plano, etc.).
+ *
+ * POR QUE HACE FALTA?
+ * Porque body-parser lanza un SyntaxError generico, y si nadie lo
+ * traduce la API responde 500 (culpa del servidor) cuando en realidad
+ * quien fallo fue el cliente: corresponde un 400.
+ *
+ * El comprobante `err.status === 400` es importante: NO basta con
+ * `instanceof SyntaxError`, porque el servidor podria lanzar un
+ * SyntaxError propio por un bug interno, y ese si es un 500.
+ *
+ * @param {Error} err
+ * @returns {AppError|null} 400 si es un JSON mal formado; null si no.
+ */
+function interpretarErrorCuerpoJson(err) {
+  if (!(err instanceof SyntaxError) || err.status !== 400) return null;
+
+  // err.message trae la posicion exacta del fallo
+  // ("...JSON at position 12"): es informacion que viene DEL CLIENTE,
+  // por eso es seguro devolverla y le sirve para corregir su peticion.
+  return AppError.validacion(MENSAJES.VALIDACION.CORPUS_JSON_INVALIDO, [
+    { campo: 'cuerpo', mensaje: err.message }
+  ]);
 }
 
 /**
@@ -173,5 +211,6 @@ module.exports = {
   capturarAsync,
   rutaNoEncontrada,
   manejadorErrores,
-  interpretarErrorMysql
+  interpretarErrorMysql,
+  interpretarErrorCuerpoJson
 };

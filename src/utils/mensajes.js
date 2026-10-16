@@ -70,6 +70,7 @@ const MENSAJES = Object.freeze({
     ID_INVALIDO: (campo) => `El campo "${campo}" debe ser un identificador valido (numero entero positivo)`,
     VALOR_PERMITIDO: (campo, lista) => `El campo "${campo}" debe ser uno de: ${lista.join(', ')}`,
     CORPUS_VACIO: 'Debes enviar el cuerpo de la peticion',
+    CORPUS_JSON_INVALIDO: 'El cuerpo de la peticion no es JSON valido',
     PARAMETRO_INVALIDO: (parametro) => `El parametro "${parametro}" no es valido`,
     FORMATO_FECHA_HORA: (campo) => `El campo "${campo}" debe tener formato de fecha y hora valido`
   }),
