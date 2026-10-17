@@ -44,6 +44,108 @@ class ReporteRepository {
       [vip ? 1 : 0, limite]
     );
   }
+
+  /**
+   * RF-DES-03 / RF-DES-04: unidades solicitadas POR SERVICIO
+   * (SUM(cantidad) de `detalle_reserva`).
+   *
+   *  - las reservas CANCELADAS no cuentan: un servicio cancelado no
+   *    fue realmente "solicitado".
+   *  - LEFT JOIN desde servicios: los servicios nunca reservados
+   *    aparecen con 0 y son candidatos a "menos solicitados".
+   *
+   * @param {{limite?:number}} opciones  limite por lista (mas/menos).
+   * @returns {Promise<object[]>} filas con unidades_solicitadas.
+   */
+  async serviciosSolicitados({ limite = 10 }) {
+    return db.ejecutar(
+      `SELECT s.id_servicio,
+              s.nombre,
+              s.precio,
+              s.estado,
+              COALESCE(d.unidades, 0) AS unidades_solicitadas,
+              COALESCE(d.reservas, 0) AS numero_reservas
+         FROM servicios s
+         LEFT JOIN (
+           SELECT dr.id_servicio,
+                  SUM(dr.cantidad) AS unidades,
+                  COUNT(DISTINCT dr.id_reserva) AS reservas
+             FROM detalle_reserva dr
+             JOIN reservas r ON r.id_reserva = dr.id_reserva
+                          AND r.estado <> 'cancelada'
+            GROUP BY dr.id_servicio
+         ) d ON d.id_servicio = s.id_servicio
+        ORDER BY unidades_solicitadas DESC, numero_reservas DESC,
+                 s.nombre ASC
+        LIMIT ?`,
+      [limite]
+    );
+  }
+
+  /**
+   * Inverso de serviciosSolicitados: las MENOS solicitadas (ASC).
+   * Misma fuente de datos; solo cambia el orden.
+   *
+   * @param {{limite?:number}} opciones
+   * @returns {Promise<object[]>}
+   */
+  async serviciosMenosSolicitados({ limite = 10 }) {
+    return db.ejecutar(
+      `SELECT s.id_servicio,
+              s.nombre,
+              s.precio,
+              s.estado,
+              COALESCE(d.unidades, 0) AS unidades_solicitadas,
+              COALESCE(d.reservas, 0) AS numero_reservas
+         FROM servicios s
+         LEFT JOIN (
+           SELECT dr.id_servicio,
+                  SUM(dr.cantidad) AS unidades,
+                  COUNT(DISTINCT dr.id_reserva) AS reservas
+             FROM detalle_reserva dr
+             JOIN reservas r ON r.id_reserva = dr.id_reserva
+                          AND r.estado <> 'cancelada'
+            GROUP BY dr.id_servicio
+         ) d ON d.id_servicio = s.id_servicio
+        ORDER BY unidades_solicitadas ASC, numero_reservas ASC,
+                 s.nombre ASC
+        LIMIT ?`,
+      [limite]
+    );
+  }
+
+  /**
+   * RF-DES-05: Top 3 de productos MENOS vendidos por unidades
+   * (SUM(cantidad) de `detalle_ventas` de ventas PAGADAS).
+   *
+   * La subconsulta filtra 'pagada' ANTES de agregar: si el JOIN se
+   * hiciera con la condicion en el ON, las lineas de ventas no pagadas
+   * seguirian sumando. Los productos jamas vendidos quedan en 0 y
+   * aparecen primero (son literalmente los menos vendidos).
+   *
+   * @returns {Promise<object[]>} siempre 3 filas (o las que haya).
+   */
+  async productosMenosVendidos() {
+    return db.ejecutar(
+      `SELECT p.id_producto,
+              p.nombre,
+              p.precio_venta,
+              p.stock_actual,
+              p.estado,
+              COALESCE(d.unidades, 0) AS unidades_vendidas
+         FROM productos p
+         LEFT JOIN (
+           SELECT dv.id_producto,
+                  SUM(dv.cantidad) AS unidades
+             FROM detalle_ventas dv
+             JOIN ventas v ON v.id_venta = dv.id_venta
+                          AND v.estado = 'pagada'
+            GROUP BY dv.id_producto
+         ) d ON d.id_producto = p.id_producto
+        ORDER BY unidades_vendidas ASC, p.nombre ASC
+        LIMIT 3`
+    );
+  }
 }
 
 // Singleton.

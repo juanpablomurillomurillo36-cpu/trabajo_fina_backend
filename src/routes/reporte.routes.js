@@ -15,5 +15,7 @@ const router = Router();
 router.use(requiereAutenticacion, requierePermiso('reportes.consultar'));
 
 router.get('/top-clientes', reporteController.topClientes);
+router.get('/servicios-solicitados', reporteController.serviciosSolicitados);
+router.get('/productos-menos-vendidos', reporteController.productosMenosVendidos);
 
 module.exports = router;

@@ -20,6 +20,26 @@ class ReporteController {
       datos: reporte
     });
   });
+
+  /** GET /api/reportes/servicios-solicitados (RF-DES-03/04) */
+  serviciosSolicitados = capturarAsync(async (req, res) => {
+    const reporte = await reporteService.serviciosSolicitados();
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.LISTA('Servicios solicitados'),
+      datos: reporte
+    });
+  });
+
+  /** GET /api/reportes/productos-menos-vendidos (RF-DES-05) */
+  productosMenosVendidos = capturarAsync(async (req, res) => {
+    const reporte = await reporteService.productosMenosVendidos();
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.LISTA('Top 3 de productos menos vendidos'),
+      datos: reporte
+    });
+  });
 }
 
 // Singleton.

@@ -16,6 +16,24 @@ const { ColectorErrores } = require('../utils/validadores');
 const TIPOS_TOP = ['vip', 'general'];
 // RF-DES-01 / RF-DES-02: el ranking es SIEMPRE Top 10.
 const LIMITE_TOP = 10;
+// RF-DES-03 / RF-DES-04: mas y menos solicitados, 10 por lista.
+const LIMITE_SERVICIOS = 10;
+
+/**
+ * Fila de servicio -> respuesta camelCase (compartida por las dos
+ * listas del reporte de servicios).
+ */
+function aServicio(fila, posicion) {
+  return {
+    posicion,
+    idServicio: Number(fila.id_servicio),
+    nombre: fila.nombre,
+    precio: formato.redondearDosDecimales(Number(fila.precio)),
+    estado: fila.estado,
+    unidadesSolicitadas: Number(fila.unidades_solicitadas),
+    numeroReservas: Number(fila.numero_reservas)
+  };
+}
 
 class ReporteService {
   /**
@@ -48,6 +66,48 @@ class ReporteService {
         esVip: Boolean(fila.es_vip),
         numeroVentas: Number(fila.numero_ventas),
         gastoTotal: formato.redondearDosDecimales(Number(fila.gasto_total))
+      }))
+    };
+  }
+
+  /**
+   * RF-DES-03 / RF-DES-04: servicios mas y menos solicitados.
+   * Las dos listas vienen del MISMO reporte (mismo orden base,
+   * direcciones opuestas) para que el panel pueda mostrarlas juntas.
+   *
+   * @returns {Promise<object>} {masSolicitados, menosSolicitados}.
+   */
+  async serviciosSolicitados() {
+    const [mas, menos] = await Promise.all([
+      reporteRepository.serviciosSolicitados({ limite: LIMITE_SERVICIOS }),
+      reporteRepository.serviciosMenosSolicitados({ limite: LIMITE_SERVICIOS })
+    ]);
+
+    return {
+      limite: LIMITE_SERVICIOS,
+      masSolicitados: mas.map((fila, i) => aServicio(fila, i + 1)),
+      menosSolicitados: menos.map((fila, i) => aServicio(fila, i + 1))
+    };
+  }
+
+  /**
+   * RF-DES-05: Top 3 de productos menos vendidos (unidades).
+   *
+   * @returns {Promise<object>} {productos:[3]}.
+   */
+  async productosMenosVendidos() {
+    const filas = await reporteRepository.productosMenosVendidos();
+
+    return {
+      limite: 3,
+      productos: filas.map((fila, indice) => ({
+        posicion: indice + 1,
+        idProducto: Number(fila.id_producto),
+        nombre: fila.nombre,
+        precioVenta: formato.redondearDosDecimales(Number(fila.precio_venta)),
+        stockActual: Number(fila.stock_actual),
+        estado: fila.estado,
+        unidadesVendidas: Number(fila.unidades_vendidas)
       }))
     };
   }
