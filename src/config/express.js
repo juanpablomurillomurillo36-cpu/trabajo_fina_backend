@@ -54,6 +54,8 @@ const rutaCategoriaCliente = require('../routes/categoriaCliente.routes');
 
 const rutaEmpleado = require('../routes/empleado.routes');
 
+const rutaCliente = require('../routes/cliente.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -151,6 +153,9 @@ function crearAplicacion() {
 
   // Ficha del personal.
   app.use('/api/empleados', rutaEmpleado);
+
+  // Ficha de clientes.
+  app.use('/api/clientes', rutaCliente);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);
