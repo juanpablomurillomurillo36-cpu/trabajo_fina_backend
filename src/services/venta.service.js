@@ -28,6 +28,7 @@ const crypto = require('node:crypto');
 const ventaRepository = require('../repositories/VentaRepository');
 const clienteRepository = require('../repositories/ClienteRepository');
 const productoRepository = require('../repositories/ProductoRepository');
+const programaPuntosService = require('./programa-puntos.service');
 const DetalleVenta = require('../models/DetalleVenta');
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
@@ -242,6 +243,11 @@ class VentaService {
       { total: totalFinal, comprobanteNo },
       venta.detalles
     );
+
+    // RN-11: el pago genera 1 punto por cada $10. Se hace fuera de la
+    // transaccion de venta: si los puntos fallan, la venta ya quedo
+    // pagada (los puntos se pueden recuperar con un job/compensacion).
+    await programaPuntosService.acumular(venta.idCliente, totalFinal);
 
     return this.obtenerConDetalles(id);
   }

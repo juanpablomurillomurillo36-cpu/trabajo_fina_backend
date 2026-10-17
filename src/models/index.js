@@ -44,6 +44,7 @@ const AgendaEvento = require('./AgendaEvento');
 const Notificacion = require('./Notificacion');
 const Venta = require('./Venta');
 const DetalleVenta = require('./DetalleVenta');
+const ProgramaPunto = require('./ProgramaPunto');
 
 module.exports = {
   Rol,
@@ -70,5 +71,6 @@ module.exports = {
   AgendaEvento,
   Notificacion,
   Venta,
-  DetalleVenta
+  DetalleVenta,
+  ProgramaPunto
 };

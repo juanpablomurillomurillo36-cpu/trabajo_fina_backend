@@ -74,6 +74,8 @@ const rutaNotificacion = require('../routes/notificacion.routes');
 
 const rutaVenta = require('../routes/venta.routes');
 
+const rutaProgramaPunto = require('../routes/programa-puntos.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -201,6 +203,9 @@ function crearAplicacion() {
 
   // Ventas al publico (composicion venta+detalle, fase 41).
   app.use('/api/ventas', rutaVenta);
+
+  // Programa de puntos RN-11 (fase 43).
+  app.use('/api/puntos', rutaProgramaPunto);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);
