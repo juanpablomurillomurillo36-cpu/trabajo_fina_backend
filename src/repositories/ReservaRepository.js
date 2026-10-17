@@ -61,6 +61,21 @@ class ReservaRepository {
   }
 
   /**
+   * Reserva dueña de un codigo QR escaneado (ingresos).
+   * Si el codigo no existe, devuelve null.
+   *
+   * @param {string} codigo
+   * @returns {Promise<Reserva|null>}
+   */
+  async obtenerPorCodigoQr(codigo) {
+    const fila = await db.obtenerUno(
+      `${SELECT_CON_CLIENTE} WHERE r.codigo_qr = ?`,
+      [codigo]
+    );
+    return Reserva.desdeFila(fila);
+  }
+
+  /**
    * Cabecera CON sus lineas (la lectura natural de una composicion).
    * Ambas lecturas ocurren en paralelo: son independientes entre si.
    *

@@ -129,6 +129,8 @@ const MENSAJES = Object.freeze({
     RESERVA_NO_CANCELABLE: 'Solo se pueden cancelar reservas pendientes o confirmadas',
     RESERVA_NO_CONFIRMABLE: 'Solo se pueden confirmar reservas pendientes',
     RESERVA_SIN_QR: 'La reserva debe estar confirmada para tener codigo QR',
+    QR_INVALIDO: 'El codigo QR no corresponde a ninguna reserva',
+    QR_RESERVA_NO_VIGENTE: 'La reserva asociada al codigo QR no esta vigente',
     RESERVA_YA_INGRESADA: 'El codigo QR de esta reserva ya fue utilizado',
     TURNO_SUPERPUESTO: 'El empleado ya tiene un turno que se superpone en esa fecha',
 
