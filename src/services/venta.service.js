@@ -12,9 +12,19 @@
  *  - total = suma de subtotales (base SIN IVA: el IVA y el comprobante
  *    los genera el PAGAR de la fase 42 — RN-10).
  *  - solo ventas PENDIENTES se editan o eliminan -> 409.
+ *
+ * Reglas de la fase 42 (RN-09 / RN-10):
+ *  - pagar: solo desde 'pendiente' -> 409 VENTA_NO_PAGABLE. Antes de
+ *    tocar la transaccion se pre-chequea stock de cada linea -> 409
+ *    STOCK_INSUFICIENTE con nombre y disponible. En transaccion se
+ *    descuenta stock, se guarda total CON IVA (16 %) y comprobante
+ *    unico, y la venta pasa a 'pagada'.
+ *  - anular: desde 'pendiente' o 'pagada' -> 409 VENTA_NO_ANULABLE;
+ *    si estaba pagada se RESTAURA el stock (transaccion).
  *  Sin try/catch (R-ASYNC).
  */
 
+const crypto = require('node:crypto');
 const ventaRepository = require('../repositories/VentaRepository');
 const clienteRepository = require('../repositories/ClienteRepository');
 const productoRepository = require('../repositories/ProductoRepository');
@@ -23,7 +33,7 @@ const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
 const formato = require('../utils/formato');
 const { ColectorErrores } = require('../utils/validadores');
-const { ESTADO_VENTA, METODO_PAGO, LIMITES } = require('../utils/constants');
+const { ESTADO_VENTA, METODO_PAGO, LIMITES, IVA } = require('../utils/constants');
 
 const ESTADOS_PERMITIDOS = Object.values(ESTADO_VENTA);
 const METODOS_PERMITIDOS = Object.values(METODO_PAGO);
@@ -184,6 +194,76 @@ class VentaService {
 
     await ventaRepository.eliminar(id);
     return venta;
+  }
+
+  /**
+   * PAGAR (RN-09/RN-10): pre-chequeo de stock + transaccion con
+   * descuento, total con IVA y comprobante unico.
+   *
+   * @param {number} id
+   * @returns {Promise<object>} la venta pagada con sus lineas.
+   */
+  async pagar(id) {
+    const venta = await this.obtenerConDetalles(id);
+
+    if (venta.estado !== ESTADO_VENTA.PENDIENTE) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.VENTA_NO_PAGABLE);
+    }
+
+    // --- pre-chequeo de stock (409 amigable, ANTES de la transaccion) --
+    const idsProductos = [...new Set(venta.detalles.map((d) => d.idProducto))];
+    const productos = await Promise.all(
+      idsProductos.map((idProducto) => productoRepository.obtenerPorId(idProducto))
+    );
+    const mapaProductos = new Map(idsProductos.map((idProducto, i) => [idProducto, productos[i]]));
+
+    for (const linea of venta.detalles) {
+      const producto = mapaProductos.get(linea.idProducto);
+      if (producto === null || producto.stockActual < linea.cantidad) {
+        throw AppError.conflicto(
+          MENSAJES.NEGOCIO.STOCK_INSUFICIENTE(
+            producto?.nombre ?? linea.idProducto,
+            producto?.stockActual ?? 0
+          ),
+          [{ campo: 'detalles', mensaje: MENSAJES.NEGOCIO.STOCK_INSUFICIENTE(producto?.nombre ?? '', producto?.stockActual ?? 0) }]
+        );
+      }
+    }
+
+    // --- total con IVA y comprobante (RN-10) ---------------------------
+    const base = Number(venta.total);
+    const iva = formato.redondearDosDecimales(base * (IVA.PORCENTAJE / 100));
+    const totalFinal = formato.redondearDosDecimales(base + iva);
+    // 'COM-' + 16 hex en mayusculas = 20 caracteres (columna VARCHAR 30).
+    const comprobanteNo = `COM-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
+
+    await ventaRepository.pagarEnTransaccion(
+      id,
+      { total: totalFinal, comprobanteNo },
+      venta.detalles
+    );
+
+    return this.obtenerConDetalles(id);
+  }
+
+  /**
+   * ANULAR (RN-09): desde pendiente o pagada. Si estaba pagada, el
+   * stock vuelve en la MISMA transaccion.
+   *
+   * @param {number} id
+   * @returns {Promise<object>} la venta anulada con sus lineas.
+   */
+  async anular(id) {
+    const venta = await this.obtenerConDetalles(id);
+
+    if (venta.estado !== ESTADO_VENTA.PENDIENTE && venta.estado !== ESTADO_VENTA.PAGADA) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.VENTA_NO_ANULABLE);
+    }
+
+    const restaurarStock = venta.estado === ESTADO_VENTA.PAGADA;
+    await ventaRepository.anularEnTransaccion(id, restaurarStock, venta.detalles);
+
+    return this.obtenerConDetalles(id);
   }
 }
 

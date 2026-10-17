@@ -10,6 +10,7 @@
 const db = require('../config/database');
 const Venta = require('../models/Venta');
 const DetalleVenta = require('./DetalleVentaRepository');
+const AppError = require('../utils/AppError');
 const { Filtros } = require('../utils/consulta');
 
 const SELECT_CON_CLIENTE = `
@@ -115,6 +116,82 @@ class VentaRepository {
 
       await DetalleVenta.eliminarPorVenta(conexion, id);
       await DetalleVenta.insertarVarios(conexion, id, detalles);
+    });
+  }
+
+  /**
+   * PAGAR (RN-09/RN-10) en UNA transaccion:
+   *   1. descuenta el stock de cada producto de sus lineas;
+   *   2. guarda el total CON IVA y el comprobante unico;
+   *   3. pasa la venta a 'pagada'.
+   * Si CUALQUIER paso falla, no se descuenta stock ni se marca pagada
+   * (rollback automatico de db.conTransaccion). El descuento lleva la
+   * guarda `stock_actual >= ?`: una carrera que agotara el stock haria
+   * affectedRows = 0 y aborta la transaccion.
+   *
+   * @param {number} id
+   * @param {{total:number, comprobanteNo:string}} datosPago
+   * @param {Array<{idProducto:number, cantidad:number}>} lineas
+   */
+  async pagarEnTransaccion(id, datosPago, lineas) {
+    await db.conTransaccion(async (conexion) => {
+      for (const linea of lineas) {
+        const [resultado] = await conexion.execute(
+          `UPDATE productos SET stock_actual = stock_actual - ?
+            WHERE id_producto = ? AND stock_actual >= ?`,
+          [linea.cantidad, linea.idProducto, linea.cantidad]
+        );
+
+        if (resultado.affectedRows === 0) {
+          // Defensa contra carreras: el pre-chequeo amigable vive en
+          // el service; aqui solo se aborta la transaccion.
+          throw AppError.conflicto('No hay stock suficiente para descontar');
+        }
+      }
+
+      const [resultadoVenta] = await conexion.execute(
+        `UPDATE ventas
+            SET total = ?, comprobante_no = ?, estado = 'pagada'
+          WHERE id_venta = ? AND estado = 'pendiente'`,
+        [datosPago.total, datosPago.comprobanteNo, id]
+      );
+
+      if (resultadoVenta.affectedRows === 0) {
+        throw AppError.conflicto('La venta ya no esta pendiente');
+      }
+    });
+  }
+
+  /**
+   * ANULAR (RN-09) en UNA transaccion. Si la venta estaba PAGADA se
+   * devuelve su stock lineas arriba; si estaba pendiente no habia
+   * descontado nada. Estado destino: 'anulada'.
+   *
+   * @param {number} id
+   * @param {boolean} restaurarStock
+   * @param {Array<{idProducto:number, cantidad:number}>} lineas
+   */
+  async anularEnTransaccion(id, restaurarStock, lineas) {
+    await db.conTransaccion(async (conexion) => {
+      const [resultado] = await conexion.execute(
+        `UPDATE ventas
+            SET estado = 'anulada'
+          WHERE id_venta = ? AND estado IN ('pendiente', 'pagada')`,
+        [id]
+      );
+
+      if (resultado.affectedRows === 0) {
+        throw AppError.conflicto('La venta ya esta anulada');
+      }
+
+      if (restaurarStock) {
+        for (const linea of lineas) {
+          await conexion.execute(
+            'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+            [linea.cantidad, linea.idProducto]
+          );
+        }
+      }
     });
   }
 
