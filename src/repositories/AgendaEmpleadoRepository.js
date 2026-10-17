@@ -103,6 +103,23 @@ class AgendaEmpleadoRepository {
     return Boolean(fila);
   }
 
+  /**
+   * Cuantos empleados estan asignados al evento (RF-EVE-10).
+   * Solo alimenta el log de notificaciones simuladas: la tabla
+   * `notificaciones` solo admite clientes, asi que este dato NO se
+   * persiste en esa tabla.
+   *
+   * @param {number} idEvento
+   * @returns {Promise<number>}
+   */
+  async contarPorEvento(idEvento) {
+    const fila = await db.obtenerUno(
+      'SELECT COUNT(*) AS total FROM agenda_empleados WHERE id_evento = ?',
+      [idEvento]
+    );
+    return Number(fila.total);
+  }
+
   async crear(fila) {
     const resultado = await db.ejecutar(
       `INSERT INTO agenda_empleados

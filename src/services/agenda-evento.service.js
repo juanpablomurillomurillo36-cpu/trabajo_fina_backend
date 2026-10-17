@@ -13,6 +13,7 @@
 
 const agendaEventoRepository = require('../repositories/AgendaEventoRepository');
 const eventoRepository = require('../repositories/EventoRepository');
+const notificacionService = require('./notificacion.service');
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
 const formato = require('../utils/formato');
@@ -118,7 +119,14 @@ class AgendaEventoService {
   async crear(cuerpo) {
     const datos = await preparar(cuerpo);
     const id = await agendaEventoRepository.crear(datos);
-    return this.obtenerPorId(id);
+    const actividad = await this.obtenerPorId(id);
+
+    // RN-12 / fase 44: fecha clave -> recordatorio a clientes (persistido)
+    // y aviso a empleados (solo log, RF-EVE-10).
+    const evento = await eventoRepository.obtenerPorId(datos.id_evento);
+    await notificacionService.notificarFechaClaveAgenda(actividad, evento.toJSON());
+
+    return actividad;
   }
 
   async actualizar(id, cuerpo) {

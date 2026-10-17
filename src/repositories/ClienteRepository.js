@@ -157,6 +157,25 @@ class ClienteRepository {
     );
     return filas.map(Cliente.desdeFila);
   }
+
+  /**
+   * Clientes ACTIVOS que cumplen anos el dia de HOY (RF-VEN-15).
+   * Se compara solo dia y mes para que el anio no invalide la fecha.
+   *
+   * @returns {Promise<Cliente[]>}
+   */
+  async listarCumpleaniosHoy() {
+    const filas = await db.ejecutar(
+      `${SELECT_CON_CATEGORIA}
+        WHERE cl.estado = ?
+          AND cl.fecha_nacimiento IS NOT NULL
+          AND MONTH(cl.fecha_nacimiento) = MONTH(CURDATE())
+          AND DAY(cl.fecha_nacimiento) = DAY(CURDATE())
+        ORDER BY cl.apellido ASC`,
+      [ESTADO.ACTIVO]
+    );
+    return filas.map(Cliente.desdeFila);
+  }
 }
 
 // Singleton.

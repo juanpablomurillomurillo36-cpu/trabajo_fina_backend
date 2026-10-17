@@ -10,6 +10,15 @@
  * nuevo, todos los clientes activos reciben una notificacion simulada
  * (ver notificarNuevoEvento).
  *
+ * Fase 44 (RF-VEN-15 / RF-EVE-10 / RF-EVE-11):
+ *  - notificarCumpleanos(): batch manual (POST /cumpleanos) que deja
+ *    una notificacion tipo 'cumpleanos' por cada cliente ACTIVO que
+ *    cumplen anos HOY, mas un unico log.
+ *  - notificarFechaClaveAgenda(): al crear una actividad de agenda,
+ *    los CLIENTES activos reciben un 'recordatorio' persistido, y los
+ *    EMPLEADOS del evento quedan solo en el LOG (la columna
+ *    id_cliente de `notificaciones` es NOT NULL: no admite empleados).
+ *
  * Reglas:
  *  - idCliente debe EXISTIR -> 400; tipo/canal segun ENUM -> 400;
  *    mensaje obligatorio (max 500) -> 400.
@@ -18,6 +27,7 @@
 
 const notificacionRepository = require('../repositories/NotificacionRepository');
 const clienteRepository = require('../repositories/ClienteRepository');
+const agendaEmpleadoRepository = require('../repositories/AgendaEmpleadoRepository');
 const Notificacion = require('../models/Notificacion');
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
@@ -166,6 +176,129 @@ class NotificacionService {
     });
 
     return insertadas;
+  }
+
+  /**
+   * CUMPLEANOS simulado por LOTE (RF-VEN-15, fase 44).
+   * Endpoint manual: revisa quienes cumplen anos HOY, les persiste su
+   * notificacion tipo 'cumpleanos' y deja UN log con el total.
+   *
+   * @returns {Promise<{destinatarios:number, fecha:string}>}
+   */
+  async notificarCumpleanos() {
+    const fechaHoy = fechas.ahoraEnMySQL().slice(0, 10);
+    const clientes = await clienteRepository.listarCumpleaniosHoy();
+
+    if (clientes.length === 0) {
+      registrarInfo('NOTIFICACION_SIMULADA', {
+        tipo: TIPO_NOTIFICACION.CUMPLEANOS,
+        destinatarios: 0,
+        fecha: fechaHoy,
+        motivo: 'nadie cumple anos hoy'
+      });
+      return { destinatarios: 0, fecha: fechaHoy };
+    }
+
+    const ahora = fechas.ahoraEnMySQL();
+    const notificaciones = clientes.map(
+      (cliente) =>
+        new Notificacion(
+          null,
+          cliente.id,
+          TIPO_NOTIFICACION.CUMPLEANOS,
+          CANAL_NOTIFICACION.EMAIL,
+          `Feliz cumpleanos, ${cliente.nombre} ${cliente.apellido}. ` +
+            'Que disfrutes tu dia en Discoteca.',
+          ahora,
+          ESTADO_NOTIFICACION.ENVIADA
+        )
+    );
+
+    const insertadas = await notificacionRepository.insertarVarias(notificaciones);
+
+    registrarInfo('NOTIFICACION_SIMULADA', {
+      tipo: TIPO_NOTIFICACION.CUMPLEANOS,
+      destinatarios: insertadas,
+      fecha: fechaHoy
+    });
+
+    return { destinatarios: insertadas, fecha: fechaHoy };
+  }
+
+  /**
+   * FECHA CLAVE de agenda (RF-EVE-10 + RF-EVE-11, fase 44): al crear
+   * una actividad de agenda del evento:
+   *
+   *  - EMPLEADOS asignados al evento -> SOLO LOG (RF-EVE-10). La
+   *    tabla notificaciones exige id_cliente NOT NULL, asi que no
+   *    existe fila posible para empleados; se deja constancia en el
+   *    log del servidor (criterio C8).
+   *  - CLIENTES activos -> fila persistida con tipo 'recordatorio'
+   *    + log con el total (RF-EVE-11).
+   *
+   * Si no hay clientes activos solo se emite el log.
+   *
+   * @param {object} actividad toJSON() de la agenda recien creada.
+   * @param {object} evento toJSON() del evento de la actividad.
+   * @returns {Promise<{empleados:number, clientes:number}>}
+   */
+  async notificarFechaClaveAgenda(actividad, evento) {
+    // --- RF-EVE-10: empleados -> solo log -------------------------------
+    const empleados = await agendaEmpleadoRepository.contarPorEvento(evento.id);
+    registrarInfo('NOTIFICACION_SIMULADA', {
+      rf: 'RF-EVE-10',
+      agenda: actividad.id,
+      evento: evento.id,
+      fecha: actividad.fecha,
+      hora: actividad.hora,
+      empleados,
+      canal: 'log',
+      motivo: 'la tabla notificaciones solo admite clientes (id_cliente NOT NULL)'
+    });
+
+    // --- RF-EVE-11: clientes -> fila persistida + log -------------------
+    const clientes = await clienteRepository.listarTodos(ESTADO.ACTIVO);
+
+    if (clientes.length === 0) {
+      registrarInfo('NOTIFICACION_SIMULADA', {
+        rf: 'RF-EVE-11',
+        agenda: actividad.id,
+        destinatarios: 0,
+        motivo: 'sin clientes activos'
+      });
+      return { empleados, clientes: 0 };
+    }
+
+    const mensaje =
+      `Recordatorio de fecha clave: "${evento.nombre}" el ${actividad.fecha} ` +
+      `a las ${actividad.hora}` +
+      (actividad.descripcion ? ` - ${actividad.descripcion}` : '') +
+      '.';
+
+    const ahora = fechas.ahoraEnMySQL();
+    const notificaciones = clientes.map(
+      (cliente) =>
+        new Notificacion(
+          null,
+          cliente.id,
+          TIPO_NOTIFICACION.RECORDATORIO,
+          CANAL_NOTIFICACION.EMAIL,
+          mensaje,
+          ahora,
+          ESTADO_NOTIFICACION.ENVIADA
+        )
+    );
+
+    const insertadas = await notificacionRepository.insertarVarias(notificaciones);
+
+    registrarInfo('NOTIFICACION_SIMULADA', {
+      rf: 'RF-EVE-11',
+      agenda: actividad.id,
+      destinatarios: insertadas,
+      tipo: TIPO_NOTIFICACION.RECORDATORIO
+    });
+
+    return { empleados, clientes: insertadas };
   }
 }
 

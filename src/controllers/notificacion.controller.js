@@ -54,6 +54,29 @@ class NotificacionController {
       datos: notificacion
     });
   });
+
+  /**
+   * POST /api/notificaciones/cumpleanos -> lote simulado (RF-VEN-15).
+   * A diferencia de `crear`, aqui no hay Location: el recurso creado
+   * es un conjunto de filas y el resumen del lote va en `datos`.
+   */
+  notificarCumpleanos = capturarAsync(async (req, res) => {
+    const { destinatarios, fecha } = await notificacionService.notificarCumpleanos();
+
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: TABLA,
+      accion: ACCION_BITACORA.CREACION,
+      // Sin id unico: el lote toca muchas filas; el resumen queda en
+      // el detalle de bitacora y en el log del servidor.
+      idRegistro: null,
+      detalle: `Lote de cumpleanos ${fecha}: ${destinatarios} notificaciones simuladas`
+    });
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Envio de cumpleanos'),
+      datos: { destinatarios, fecha }
+    });
+  });
 }
 
 // Singleton.

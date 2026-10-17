@@ -18,5 +18,8 @@ router.use(requiereAutenticacion, requierePermiso('notificaciones.gestionar'));
 router.get('/', notificacionController.listar);
 router.get('/:id', validarIdNumerico('id'), notificacionController.obtenerPorId);
 router.post('/', notificacionController.crear);
+// Lote de cumpleanos (RF-VEN-15): ruta literal ANTES de '/:id' para
+// que 'cumpleanos' nunca se interprete como un id numerico.
+router.post('/cumpleanos', notificacionController.notificarCumpleanos);
 
 module.exports = router;
