@@ -28,8 +28,10 @@
  */
 
 const permisoService = require('../services/permiso.service');
+const bitacoraService = require('../services/bitacora.service');
 const respuesta = require('../utils/respuesta');
 const MENSAJES = require('../utils/mensajes');
+const { ACCION_BITACORA } = require('../utils/constants');
 const { capturarAsync } = require('../middleware/errorHandler');
 
 class PermisoController {
@@ -85,6 +87,13 @@ class PermisoController {
   crear = capturarAsync(async (req, res) => {
     const permiso = await permisoService.crear(req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'permisos',
+      accion: ACCION_BITACORA.CREACION,
+      idRegistro: permiso.id,
+      detalle: `Permiso "${permiso.nombrePermiso}" creado`
+    });
+
     // Cabecera Location: le dice al cliente en que URL quedo el
     // recurso recien creado. Es parte del estandar REST (C4).
     res.set('Location', `/api/permisos/${permiso.id}`);
@@ -104,6 +113,13 @@ class PermisoController {
 
     const permiso = await permisoService.actualizar(id, req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'permisos',
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: permiso.id,
+      detalle: `Permiso "${permiso.nombrePermiso}" actualizado`
+    });
+
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.ACTUALIZADO('Permiso'),
       datos: permiso
@@ -122,6 +138,13 @@ class PermisoController {
 
     const permiso = await permisoService.cambiarEstado(id, req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'permisos',
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: permiso.id,
+      detalle: `Estado del permiso "${permiso.nombrePermiso}": ahora "${permiso.estado}"`
+    });
+
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Cambio de estado'),
       datos: permiso
@@ -139,6 +162,13 @@ class PermisoController {
     const id = req.idsValidados.id;
 
     const resumen = await permisoService.eliminar(id);
+
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'permisos',
+      accion: ACCION_BITACORA.ANULACION,
+      idRegistro: resumen.id,
+      detalle: `Permiso "${resumen.nombrePermiso}" eliminado`
+    });
 
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.ELIMINADO('Permiso'),

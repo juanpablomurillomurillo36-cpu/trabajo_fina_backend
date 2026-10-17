@@ -41,6 +41,8 @@ const rutaRol = require('../routes/rol.routes');
 
   const rutaAuth = require('../routes/auth.routes');
 
+  const rutaBitacora = require('../routes/bitacora.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -119,6 +121,9 @@ function crearAplicacion() {
   // Sesion: login, logout, registro publico y perfil propio. Todo lo
   // que necesite token se protege DENTRO de sus propias rutas.
   app.use('/api/auth', rutaAuth);
+
+  // Auditoria de cambios (lectura): exigir permiso bitacora.consultar.
+  app.use('/api/bitacora', rutaBitacora);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

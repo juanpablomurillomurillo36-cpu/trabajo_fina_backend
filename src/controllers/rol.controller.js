@@ -20,11 +20,15 @@
  *   DELETE /api/roles/:id                 Eliminar (si no esta en uso)
  *   POST   /api/roles/:id/permisos        Asignar un permiso (N:M)
  *   DELETE /api/roles/:id/permisos/:idPermiso  Quitar un permiso (N:M)
+ *
+ * AUDITORIA (fase 22): las MUTACIONES dejan evento en bitacora.
  */
 
 const rolService = require('../services/rol.service');
+const bitacoraService = require('../services/bitacora.service');
 const respuesta = require('../utils/respuesta');
 const MENSAJES = require('../utils/mensajes');
+const { ACCION_BITACORA } = require('../utils/constants');
 const { capturarAsync } = require('../middleware/errorHandler');
 
 class RolController {
@@ -58,6 +62,13 @@ class RolController {
   crear = capturarAsync(async (req, res) => {
     const rol = await rolService.crear(req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'roles',
+      accion: ACCION_BITACORA.CREACION,
+      idRegistro: rol.id,
+      detalle: `Rol "${rol.nombreRol}" creado`
+    });
+
     // El estandar REST dice que al crear un recurso se informe DONDE
     // quedo: quien recibe 201 puede hacer GET a esa URL sin adivinar.
     res.set('Location', `/api/roles/${rol.id}`);
@@ -72,6 +83,13 @@ class RolController {
   actualizar = capturarAsync(async (req, res) => {
     const rol = await rolService.actualizar(req.idsValidados.id, req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'roles',
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: rol.id,
+      detalle: `Rol "${rol.nombreRol}" actualizado`
+    });
+
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.ACTUALIZADO('Rol'),
       datos: rol
@@ -82,6 +100,13 @@ class RolController {
   cambiarEstado = capturarAsync(async (req, res) => {
     const rol = await rolService.cambiarEstado(req.idsValidados.id, req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'roles',
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: rol.id,
+      detalle: `Estado del rol "${rol.nombreRol}": ahora "${rol.estado}"`
+    });
+
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Cambio de estado'),
       datos: rol
@@ -91,6 +116,13 @@ class RolController {
   /** DELETE /api/roles/:id */
   eliminar = capturarAsync(async (req, res) => {
     const resumen = await rolService.eliminar(req.idsValidados.id);
+
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'roles',
+      accion: ACCION_BITACORA.ANULACION,
+      idRegistro: resumen.id,
+      detalle: `Rol "${resumen.nombreRol}" eliminado`
+    });
 
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.ELIMINADO('Rol'),

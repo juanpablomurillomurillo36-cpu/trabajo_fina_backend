@@ -14,16 +14,26 @@
  * ---------------------------------------------------------------------
  *
  * NOTA DE SEGURIDAD: las rutas de LOGIN, REGISTRO, PERFIL y
- * RECUPERACION de contrasena NO viven aqui: van en /api/acceso
+ * RECUPERACION de contrasena NO viven aqui: van en /api/auth
  * (fase 20-21), porque son operaciones de SESION, no del CRUD.
+ *
+ * PROTECCION (fase 22): TODO el CRUD exige token + permiso
+ * `usuarios.gestionar`. Gestionar cuentas es la operacion mas
+ * sensible del sistema: quien puede crear usuarios puede crear
+ * administradores.
  */
 
 const { Router } = require('express');
 
 const usuarioController = require('../controllers/usuario.controller');
 const { validarIdNumerico, exigirCuerpo } = require('../middleware/validarParametros');
+const { requiereAutenticacion } = require('../middleware/autenticacion');
+const { requierePermiso } = require('../middleware/autorizacion');
 
 const router = Router();
+
+// Proteccion GLOBAL de la ruta: todo lo que sigue pasa por aqui.
+router.use(requiereAutenticacion, requierePermiso('usuarios.gestionar'));
 
 // ---- Coleccion: /api/usuarios ----
 router.get('/', usuarioController.listar);

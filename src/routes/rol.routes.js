@@ -18,6 +18,8 @@
  * DELETE /api/roles/:id                 Eliminar (409 si tiene usuarios)
  * POST   /api/roles/:id/permisos        Asignar permiso (body: idPermiso)
  * DELETE /api/roles/:id/permisos/:idPermiso  Quitar permiso
+ * PROTECCION (fase 22): todo el CRUD exige token + permiso
+ * `roles.gestionar` (quien controla roles controla permisos).
  * ---------------------------------------------------------------------
  */
 
@@ -25,8 +27,13 @@ const { Router } = require('express');
 
 const rolController = require('../controllers/rol.controller');
 const { validarIdNumerico, exigirCuerpo } = require('../middleware/validarParametros');
+const { requiereAutenticacion } = require('../middleware/autenticacion');
+const { requierePermiso } = require('../middleware/autorizacion');
 
 const router = Router();
+
+// Proteccion GLOBAL de la ruta: todo lo que sigue pasa por aqui.
+router.use(requiereAutenticacion, requierePermiso('roles.gestionar'));
 
 // ---- Coleccion: /api/roles ----
 router.get('/', rolController.listar);

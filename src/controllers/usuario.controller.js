@@ -18,11 +18,17 @@
  *   PUT    /api/usuarios/:id           Actualizar
  *   PATCH  /api/usuarios/:id/estado    Activar / desactivar
  *   DELETE /api/usuarios/:id           Eliminar (409 si tiene historial)
+ *
+ * AUDITORIA (fase 22): cada MUTACION deja un evento en la bitacora
+ * con quien la hizo (req.usuario) y desde que IP. Las lecturas no
+ * se auditarian (serian ruido: el listado se consulta 100 veces).
  */
 
 const usuarioService = require('../services/usuario.service');
+const bitacoraService = require('../services/bitacora.service');
 const respuesta = require('../utils/respuesta');
 const MENSAJES = require('../utils/mensajes');
+const { ACCION_BITACORA } = require('../utils/constants');
 const { capturarAsync } = require('../middleware/errorHandler');
 
 class UsuarioController {
@@ -51,6 +57,13 @@ class UsuarioController {
   crear = capturarAsync(async (req, res) => {
     const usuario = await usuarioService.crear(req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'usuarios',
+      accion: ACCION_BITACORA.CREACION,
+      idRegistro: usuario.id,
+      detalle: `Usuario ${usuario.email} creado`
+    });
+
     res.set('Location', `/api/usuarios/${usuario.id}`);
 
     return respuesta.creado(res, {
@@ -63,6 +76,13 @@ class UsuarioController {
   actualizar = capturarAsync(async (req, res) => {
     const usuario = await usuarioService.actualizar(req.idsValidados.id, req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'usuarios',
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: usuario.id,
+      detalle: `Usuario ${usuario.email} actualizado`
+    });
+
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.ACTUALIZADO('Usuario'),
       datos: usuario
@@ -73,6 +93,13 @@ class UsuarioController {
   cambiarEstado = capturarAsync(async (req, res) => {
     const usuario = await usuarioService.cambiarEstado(req.idsValidados.id, req.body);
 
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'usuarios',
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: usuario.id,
+      detalle: `Estado de ${usuario.email}: ahora "${usuario.estado}"`
+    });
+
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Cambio de estado'),
       datos: usuario
@@ -82,6 +109,13 @@ class UsuarioController {
   /** DELETE /api/usuarios/:id */
   eliminar = capturarAsync(async (req, res) => {
     const resumen = await usuarioService.eliminar(req.idsValidados.id);
+
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: 'usuarios',
+      accion: ACCION_BITACORA.ANULACION,
+      idRegistro: resumen.id,
+      detalle: `Usuario ${resumen.email} eliminado`
+    });
 
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.ELIMINADO('Usuario'),

@@ -28,14 +28,23 @@
  * PATCH  /api/permisos/:id/estado    Cambiar estado (activo/inactivo)
  * DELETE /api/permisos/:id           Eliminar (si no esta en uso)
  * ---------------------------------------------------------------------
+ *
+ * PROTECCION (fase 22): todo el CRUD exige token + permiso
+ * `permisos.gestionar` (quien otorga permisos es super-administrador
+ * de facto).
  */
 
 const { Router } = require('express');
 
 const permisoController = require('../controllers/permiso.controller');
 const { validarIdNumerico, exigirCuerpo } = require('../middleware/validarParametros');
+const { requiereAutenticacion } = require('../middleware/autenticacion');
+const { requierePermiso } = require('../middleware/autorizacion');
 
 const router = Router();
+
+// Proteccion GLOBAL de la ruta: todo lo que sigue pasa por aqui.
+router.use(requiereAutenticacion, requierePermiso('permisos.gestionar'));
 
 // ---------------------------------------------------------------------
 // Coleccion: /api/permisos

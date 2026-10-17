@@ -23,10 +23,12 @@ const Rol = require('./Rol');
 const Permiso = require('./Permiso');
 const Usuario = require('./Usuario');
 const Acceso = require('./Acceso');
+const Bitacora = require('./Bitacora');
 
 module.exports = {
   Rol,
   Permiso,
   Usuario,
-  Acceso
+  Acceso,
+  Bitacora
 };

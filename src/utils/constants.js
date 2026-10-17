@@ -103,6 +103,16 @@ const RESULTADO_ACCESO = Object.freeze({
 });
 
 // ---------------------------------------------------------------------
+// BITACORA (columna bitacora.accion) - auditoria de datos
+// Coinciden en MAYUSCULAS con el ENUM de la base.
+// ---------------------------------------------------------------------
+const ACCION_BITACORA = Object.freeze({
+  CREACION: 'CREACION',
+  EDICION: 'EDICION',
+  ANULACION: 'ANULACION'
+});
+
+// ---------------------------------------------------------------------
 // NOTIFICACIONES (tabla notificaciones) - simuladas
 // RN-12: se guardan en la base y se registran en consola.
 // ---------------------------------------------------------------------
@@ -239,6 +249,7 @@ module.exports = {
   ESTADO_INGRESO,
   TIPO_ACCION_ACCESO,
   RESULTADO_ACCESO,
+  ACCION_BITACORA,
   SEGURIDAD,
   TIPO_NOTIFICACION,
   CANAL_NOTIFICACION,
