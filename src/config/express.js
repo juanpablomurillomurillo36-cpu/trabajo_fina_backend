@@ -56,6 +56,8 @@ const rutaEmpleado = require('../routes/empleado.routes');
 
 const rutaCliente = require('../routes/cliente.routes');
 
+const rutaCompra = require('../routes/compra.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -156,6 +158,9 @@ function crearAplicacion() {
 
   // Ficha de clientes.
   app.use('/api/clientes', rutaCliente);
+
+  // Compras a proveedores (composicion compra+detalles).
+  app.use('/api/compras', rutaCompra);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

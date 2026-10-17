@@ -110,6 +110,8 @@ const MENSAJES = Object.freeze({
     COMPRA_SIN_DETALLES: 'La compra debe tener al menos un detalle',
     COMPRA_NO_CONFIRMABLE: 'Solo se pueden confirmar compras en estado pendiente',
     COMPRA_NO_ANULABLE: 'Solo se pueden anular compras en estado pendiente',
+    COMPRA_NO_EDITABLE: 'Solo se pueden modificar compras pendientes',
+    COMPRA_NO_ELIMINABLE: 'Solo se pueden eliminar compras pendientes',
     PRODUCTO_NO_EXISTE_EN_CATALOGO: (nombre) => `El producto "${nombre}" no existe o esta inactivo`,
 
     // RN-03 inventario
