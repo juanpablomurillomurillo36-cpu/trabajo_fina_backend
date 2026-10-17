@@ -68,6 +68,10 @@ const rutaIngreso = require('../routes/ingreso.routes');
 
 const rutaEvento = require('../routes/evento.routes');
 
+const rutaAgendaEvento = require('../routes/agendaEvento.routes');
+
+const rutaNotificacion = require('../routes/notificacion.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -186,6 +190,12 @@ function crearAplicacion() {
 
   // Programacion de eventos (fase 38).
   app.use('/api/eventos', rutaEvento);
+
+  // Agenda de actividades del evento con conflicto RN-08 (fase 40).
+  app.use('/api/agenda-eventos', rutaAgendaEvento);
+
+  // Notificaciones simuladas RN-12 (fase 40).
+  app.use('/api/notificaciones', rutaNotificacion);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

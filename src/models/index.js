@@ -40,6 +40,8 @@ const Ingreso = require('./Ingreso');
 const Evento = require('./Evento');
 const FichaTecnica = require('./FichaTecnica');
 const FichaServicio = require('./FichaServicio');
+const AgendaEvento = require('./AgendaEvento');
+const Notificacion = require('./Notificacion');
 
 module.exports = {
   Rol,
@@ -62,5 +64,7 @@ module.exports = {
   Ingreso,
   Evento,
   FichaTecnica,
-  FichaServicio
+  FichaServicio,
+  AgendaEvento,
+  Notificacion
 };

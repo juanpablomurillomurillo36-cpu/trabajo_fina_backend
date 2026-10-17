@@ -16,6 +16,7 @@
  */
 
 const eventoRepository = require('../repositories/EventoRepository');
+const notificacionService = require('./notificacion.service');
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
 const formato = require('../utils/formato');
@@ -102,7 +103,13 @@ class EventoService {
   async crear(cuerpo) {
     const datos = preparar(cuerpo);
     const id = await eventoRepository.crear(datos);
-    return this.obtenerPorId(id);
+    const evento = await this.obtenerPorId(id);
+
+    // RN-12 (fase 40): al nacer el evento se SIMULA el aviso a todos
+    // los clientes activos (filas en notificaciones + aviso en log).
+    await notificacionService.notificarNuevoEvento(evento);
+
+    return evento;
   }
 
   async actualizar(id, cuerpo) {
