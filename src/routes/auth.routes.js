@@ -5,17 +5,20 @@
  *
  * TABLA DE ENDPOINTS
  * ---------------------------------------------------------------------
- * POST  /api/auth/login       Iniciar sesion (email + contrasena)
- * POST  /api/auth/logout      Cerrar sesion (registra en bitacora)
- * POST  /api/auth/registro    Registro PUBLICO (rol cliente por defecto)
- * GET   /api/auth/mi-perfil   Datos del usuario autenticado
- * PUT   /api/auth/mi-perfil   Editar nombre/apellido/email/telefono
+ * POST  /api/auth/login             Iniciar sesion (email + contrasena)
+ * POST  /api/auth/logout            Cerrar sesion (registra en bitacora)
+ * POST  /api/auth/registro          Registro PUBLICO (rol cliente por defecto)
+ * POST  /api/auth/recuperar-password    Paso 1: pide codigo (publico)
+ * POST  /api/auth/restablecer-password  Paso 2: codigo + clave nueva
+ * GET   /api/auth/mi-perfil         Datos del usuario autenticado
+ * PUT   /api/auth/mi-perfil         Editar nombre/apellido/email/telefono
  * ---------------------------------------------------------------------
  *
  * CUALES ESTAN PROTEGIDAS?
- *   login y registro son PUBLICOS (no tiene sentido exigir token para
- *   obtener uno). Las demas pasan por `requiereAutenticacion`, que
- *   verifica el JWT y popula req.usuario con los datos del dueño.
+ *   login, registro y la recuperacion son PUBLICOS (no tiene sentido
+ *   exigir token para obtener uno o para recuperar la clave perdida).
+ *   Las demas pasan por `requiereAutenticacion`, que verifica el JWT
+ *   y popula req.usuario con los datos del dueño.
  */
 
 const { Router } = require('express');
@@ -29,6 +32,8 @@ const router = Router();
 // ---- Publicas ----
 router.post('/login', exigirCuerpo, authController.login);
 router.post('/registro', exigirCuerpo, authController.registro);
+router.post('/recuperar-password', exigirCuerpo, authController.recuperarPassword);
+router.post('/restablecer-password', exigirCuerpo, authController.restablecerPassword);
 
 // ---- Protegidas (token valido obligatorio) ----
 router.post('/logout', requiereAutenticacion, authController.logout);

@@ -37,13 +37,18 @@
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
 const formato = require('../utils/formato');
+const fechas = require('../utils/fechas');
 const configuracion = require('../config/env');
 const tokens = require('../utils/tokens');
+const cifrado = require('../utils/cifrado');
+const { randomInt } = require('node:crypto');
+const { ColectorErrores } = require('../utils/validadores');
 const { Acceso } = require('../models');
 const { TIPO_ACCION_ACCESO, RESULTADO_ACCESO, SEGURIDAD } = require('../utils/constants');
 const usuarioRepository = require('../repositories/UsuarioRepository');
 const rolRepository = require('../repositories/RolRepository');
 const accesoRepository = require('../repositories/AccesoRepository');
+const codigoRepository = require('../repositories/CodigoRecuperacionRepository');
 const usuarioService = require('./usuario.service');
 
 // Campos que el cliente puede cambiar en SU PROPIO perfil. idRol,
@@ -116,6 +121,125 @@ class AuthService {
     return {
       mensaje: 'Sesion cerrada. Descarta el token del cliente.'
     };
+  }
+
+  /**
+   * RECUPERAR CONTRASENA (paso 1): emite un codigo de 6 digitos.
+   *
+   * RESPUESTA SIEMPRE IGUAL exista o no el correo. Si se respondiera
+   * "404 ese correo no existe", un atacante podria pasar una lista de
+   * correos y descubrir quienes tienen cuenta aqui (enumeracion de
+   * cuentas). Por eso el mensaje es condicional: "SI el correo esta
+   * registrado...".
+   *
+   * El codigo se GUARDA HASHEADO (bcrypt): con el volcado de la base
+   * no sirve de nada. Vive 15 minutos y admite 5 intentos.
+   *
+   * @param {object} datos      { email }
+   * @param {string|null} ipOrigen
+   * @returns {Promise<{mensaje: string, codigo?: string}>}
+   *   `codigo` SOLO se incluye en desarrollo, para poder probar el
+   *   flujo en Postman sin un servidor de correo real.
+   */
+  async recuperarPassword(datos = {}, ipOrigen = null) {
+    const email = formato.aMinusculas(datos.email ?? '');
+    const usuario = await usuarioRepository.obtenerPorEmail(email);
+
+    // Correo inexistente o cuenta inactiva: misma respuesta que si
+    // existiera. No hay fila de bitacora que poner (id_usuario es FK).
+    if (usuario === null || !usuario.estaActivo()) {
+      return { mensaje: MENSAJES.EXITO.CORREO_ENVIADO };
+    }
+
+    // Codigo de 6 digitos: randomInt es criptograficamente seguro
+    // (no Math.random, que es predecible).
+    const codigo = String(randomInt(0, 1000000)).padStart(6, '0');
+    const codigoHash = await cifrado.hashearPassword(codigo);
+
+    const fechaExpiracion = fechas.ahoraEnMySQL(
+      new Date(Date.now() + SEGURIDAD.VIDA_CODIGO_MINUTOS * 60 * 1000)
+    );
+
+    // Un solo codigo vivo por cuenta: los anteriores quedan invalidos.
+    await codigoRepository.invalidarPendientes(usuario.id);
+    await codigoRepository.crear({ idUsuario: usuario.id, codigoHash, fechaExpiracion });
+
+    await this.#registrar(usuario.id, TIPO_ACCION_ACCESO.RECUPERAR_PASSWORD, ipOrigen, RESULTADO_ACCESO.EXITOSO);
+
+    // "Envio" simulado (RN-12: notificaciones registradas en consola).
+    // No hay servidor de correo en este proyecto; en produccion aqui
+    // se llamaria al proveedor de email con el codigo en claro.
+    console.log(`[recuperacion] Codigo para ${usuario.email}: ${codigo}`);
+
+    if (configuracion.esDesarrollo) {
+      return { mensaje: MENSAJES.EXITO.CORREO_ENVIADO, codigo };
+    }
+
+    return { mensaje: MENSAJES.EXITO.CORREO_ENVIADO };
+  }
+
+  /**
+   * RESTABLECER CONTRASENA (paso 2): intercodigo por la clave nueva.
+   *
+   * Orden de comprobaciones (la barata primero, para no gastar bcrypt
+   * ni consumir intentos con datos obviously malos):
+   *   1. validar el formato de la contrasena nueva,
+   *   2. existe el usuario y hay codigo vigente,
+   *   3. no se agoto el tope de intentos,
+   *   4. el codigo coincide (bcrypt),
+   *   5. recien ahi: hashear, guardar y marcar el codigo como usado.
+   *
+   * @param {object} datos  { email, codigo, contrasena }
+   * @param {string|null} ipOrigen
+   * @returns {Promise<{mensaje: string}>}
+   */
+  async restablecerPassword(datos = {}, ipOrigen = null) {
+    // 1. La contrasena nueva debe cumplir la misma regla de fortaleza
+    //    que en registro, ANTES de tocar el codigo.
+    const errores = new ColectorErrores();
+    errores.exigirCorreo('email', datos.email);
+    errores.exigirContrasena('contrasena', datos.contrasena);
+    errores.lanzarSiHay('No se pudo restablecer la contrasena.');
+
+    const email = formato.aMinusculas(datos.email ?? '');
+    const codigo = String(datos.codigo ?? '').trim();
+
+    const usuario = await usuarioRepository.obtenerPorEmail(email);
+
+    // Mensaje UNICO para "correo no existe" y "codigo malo": sin la
+    // cuenta correcta + codigo correcto juntos, no se avanza.
+    if (usuario === null) {
+      throw AppError.validacion(MENSAJES.NEGOCIO.CODIGO_INVALIDO);
+    }
+
+    const activo = await codigoRepository.obtenerActivo(usuario.id);
+
+    if (activo === null) {
+      throw AppError.validacion(MENSAJES.NEGOCIO.CODIGO_INVALIDO);
+    }
+
+    if (activo.intentos >= SEGURIDAD.INTENTOS_CODIGO_MAX) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.CODIGO_INTENTOS_EXCEDIDOS);
+    }
+
+    // 4. Comparacion de HASHES: el codigo en claro nunca se guarda.
+    const coincide = await cifrado.verificarPassword(codigo, activo.codigoHash);
+
+    if (!coincide) {
+      await codigoRepository.sumarIntento(activo.idCodigo);
+      throw AppError.validacion(MENSAJES.NEGOCIO.CODIGO_INVALIDO);
+    }
+
+    // 5. Exitosamente validado: el codigo muere para siempre y la
+    //    clave nueva entra en vigor.
+    await codigoRepository.marcarComoUsado(activo.idCodigo);
+
+    const hash = await cifrado.hashearPassword(datos.contrasena);
+    await usuarioRepository.cambiarContrasena(usuario.id, hash);
+
+    await this.#registrar(usuario.id, TIPO_ACCION_ACCESO.RESTABLECER_PASSWORD, ipOrigen, RESULTADO_ACCESO.EXITOSO);
+
+    return { mensaje: MENSAJES.EXITO.CONTRASENA_RESTABLECIDA };
   }
 
   /**

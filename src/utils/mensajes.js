@@ -101,6 +101,8 @@ const MENSAJES = Object.freeze({
     ROL_EN_USO: 'No se puede eliminar: hay usuarios asignados a este rol',
     PERMISO_EN_USO: 'No se puede eliminar: el permiso esta asignado a uno o mas roles',
     PERMISO_NO_EXISTE: 'El permiso solicitado no existe',
+    CODIGO_INVALIDO: 'El codigo de recuperacion es invalido, expiro o ya fue utilizado',
+    CODIGO_INTENTOS_EXCEDIDOS: 'Demasiados intentos con este codigo; solicita uno nuevo',
 
     // RN-01 compras
     COMPRA_SIN_DETALLES: 'La compra debe tener al menos un detalle',

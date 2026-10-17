@@ -11,11 +11,13 @@
  * manejador central. AQUI NO HAY try/catch.
  *
  * TABLA DE ENDPOINTS (tambien esta en routes/auth.routes.js)
- *   POST  /api/auth/login       Iniciar sesion (devuelve token)
- *   POST  /api/auth/logout      Cerrar sesion (registra en bitacora)
- *   POST  /api/auth/registro    Registro PUBLICO (rol cliente)
- *   GET   /api/auth/mi-perfil   Datos propios (requiere token)
- *   PUT   /api/auth/mi-perfil   Editar datos propios (requiere token)
+ *   POST  /api/auth/login             Iniciar sesion (devuelve token)
+ *   POST  /api/auth/logout            Cerrar sesion (registra en bitacora)
+ *   POST  /api/auth/registro          Registro PUBLICO (rol cliente)
+ *   POST  /api/auth/recuperar-password  Paso 1: emite codigo (publico)
+ *   POST  /api/auth/restablecer-password Paso 2: codigo -> clave nueva
+ *   GET   /api/auth/mi-perfil         Datos propios (requiere token)
+ *   PUT   /api/auth/mi-perfil         Editar datos propios (requiere token)
  */
 
 const authService = require('../services/auth.service');
@@ -54,6 +56,28 @@ class AuthController {
 
     return respuesta.creado(res, {
       mensaje: MENSAJES.EXITO.CREADO('Usuario'),
+      datos: resultado
+    });
+  });
+
+  /** POST /api/auth/recuperar-password  (paso 1, siempre 200) */
+  recuperarPassword = capturarAsync(async (req, res) => {
+    const resultado = await authService.recuperarPassword(req.body, req.ip);
+
+    // 200 a proposito exista o no el correo: una respuesta distinta
+    // delataria quienes tienen cuenta (enumeracion de cuentas).
+    return respuesta.exito(res, {
+      mensaje: resultado.mensaje,
+      datos: resultado
+    });
+  });
+
+  /** POST /api/auth/restablecer-password  (paso 2: codigo + clave nueva) */
+  restablecerPassword = capturarAsync(async (req, res) => {
+    const resultado = await authService.restablecerPassword(req.body, req.ip);
+
+    return respuesta.exito(res, {
+      mensaje: resultado.mensaje,
       datos: resultado
     });
   });

@@ -116,13 +116,15 @@ function esPasada(valor) {
 }
 
 /**
- * Devuelve la fecha y hora de AHORA en formato MySQL.
+ * Devuelve la fecha y hora en formato MySQL.
  * Se usa en la bitacora y en registros con DEFAULT CURRENT_TIMESTAMP.
  *
+ * @param {Date} [fecha=new Date()]  Opcional: para fechas futuras
+ *   (ej. "ahora + 15 min" como vencimiento de un codigo).
  * @returns {string} "2026-10-15 21:30:00"
  */
-function ahoraEnMySQL() {
-  return aFechaMySQL(new Date());
+function ahoraEnMySQL(fecha = new Date()) {
+  return aFechaMySQL(fecha);
 }
 
 /**

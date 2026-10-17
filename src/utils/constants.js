@@ -186,7 +186,17 @@ const LIMITES = Object.freeze({
  * El seed de la fase 49 crea el rol con exactamente este nombre.
  */
 const SEGURIDAD = Object.freeze({
-  ROL_CLIENTE_DEFECTO: 'cliente'
+  ROL_CLIENTE_DEFECTO: 'cliente',
+
+  /** Vida util del codigo de recuperacion de contrasena (minutos). */
+  VIDA_CODIGO_MINUTOS: 15,
+
+  /**
+   * Intentos MAXIMOS para verificar un codigo antes de invalidarlo.
+   * Con 6 digitos (10^6 combinaciones) y solo 5 intentos, la fuerza
+   * bruta es inviable: el codigo caduca ademas en 15 minutos.
+   */
+  INTENTOS_CODIGO_MAX: 5
 });
 
 // ---------------------------------------------------------------------

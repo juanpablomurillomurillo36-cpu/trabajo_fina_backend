@@ -170,6 +170,53 @@ FLUSH PRIVILEGES;
 
 ---
 
+### C-05 — Tabla `codigos_recuperacion` · ✅ aplicado (Fase 21) · **Criterio C7**
+
+**Qué:** tabla que guarda los códigos de recuperación de contraseña
+(olvidé mi contraseña). Cada código se guarda **hasheado con bcrypt**,
+con expiración de 15 minutos, tope de 5 intentos y marca de uso.
+
+**Por qué:** el criterio **C7 (autenticación y autorización)** incluye el
+flujo de recuperación de contraseña. La tabla `notificaciones` no sirve
+para esto: su FK apunta a `clientes`, no a `usuarios`. Y guardar el código
+en claro violaría la misma regla que la contraseña: con el volcado de la
+base, un código en claro equivale a una cuenta robada.
+
+**SQL ejecutado:**
+
+```sql
+CREATE TABLE codigos_recuperacion (
+  id_codigo        INT          NOT NULL AUTO_INCREMENT,
+  id_usuario       INT          NOT NULL,
+  codigo_hash      VARCHAR(255) NOT NULL COMMENT 'bcrypt del codigo de 6 digitos; jamas el codigo en claro',
+  fecha_expiracion DATETIME     NOT NULL COMMENT 'Vida util del codigo (15 minutos)',
+  intentos         INT          NOT NULL DEFAULT 0 COMMENT 'Intentos de verificacion; el tope (5) se aplica en la API',
+  usado            TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1 = ya se intercambio por una contrasena nueva',
+  fecha_creacion   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id_codigo),
+  KEY fk_codigo_usuario (id_usuario),
+  CONSTRAINT fk_codigo_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+```
+
+**Decisiones de diseño:**
+
+| Decisión | Motivo |
+|---|---|
+| `codigo_hash` (bcrypt) | El código es una credencial temporal: mismo trato que la contraseña |
+| `fecha_expiracion` (15 min) | Ventana corta: un código robado caduca rápido |
+| `intentos` (tope 5 en la API) | 6 dígitos = 10⁶ combinaciones; 5 intentos por código hacen el fuerza bruta inviable |
+| `usado` | Un código sirve UNA sola vez; tras restablecer queda inservible |
+| `ON DELETE CASCADE` | Al borrar la cuenta, sus códigos mueren con ella (son desechables; a diferencia de `bitacora`, no aportan auditoría que deba conservarse) |
+| Índice solo en `id_usuario` | La consulta típica es "código activo de este usuario" |
+
+**Estado actual de `discoteca_api` (tras esta tabla):** 28 tablas,
+29 claves foráneas.
+
+---
+
 ## 3. CAMBIOS PLANEADOS (se ejecutarán en su fase)
 
 ### C-01 — Crear tabla `bitacora` · **Fase 10** · **Criterio C8**

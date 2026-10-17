@@ -173,6 +173,27 @@ CREATE TABLE `clientes` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `codigos_recuperacion`
+--
+
+DROP TABLE IF EXISTS `codigos_recuperacion`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `codigos_recuperacion` (
+  `id_codigo` int NOT NULL AUTO_INCREMENT,
+  `id_usuario` int NOT NULL,
+  `codigo_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci NOT NULL COMMENT 'bcrypt del codigo de 6 digitos; jamas el codigo en claro',
+  `fecha_expiracion` datetime NOT NULL COMMENT 'Vida util del codigo (15 minutos)',
+  `intentos` int NOT NULL DEFAULT '0' COMMENT 'Intentos de verificacion; el tope (5) se aplica en la API',
+  `usado` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1 = ya se intercambio por una contrasena nueva',
+  `fecha_creacion` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id_codigo`),
+  KEY `fk_codigo_usuario` (`id_usuario`),
+  CONSTRAINT `fk_codigo_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `compras`
 --
 
