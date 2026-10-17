@@ -21,8 +21,10 @@
 
 const Rol = require('./Rol');
 const Permiso = require('./Permiso');
+const Usuario = require('./Usuario');
 
 module.exports = {
   Rol,
-  Permiso
+  Permiso,
+  Usuario
 };

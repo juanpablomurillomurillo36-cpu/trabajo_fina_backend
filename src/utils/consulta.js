@@ -138,6 +138,51 @@ class Filtros {
   }
 
   /**
+   * Busqueda de texto en VARIAS columnas a la vez (OR).
+   *
+   * Ejemplo: buscar un usuario escribiendo nombre, apellido o correo
+   * en un solo campo de busqueda.
+   *
+   *   filtros.agregarBusquedaMulti(['nombre', 'apellido', 'email'], q);
+   *   // -> (nombre LIKE ? OR apellido LIKE ? OR email LIKE ?)
+   *
+   * Se construye UNA sola clausula entre parentesis para que el OR no
+   * se "escape" y se combine mal con otros filtros: sin parentesis,
+   *   WHERE estado = ? OR nombre LIKE ?
+   * devolveria TODOS los registros (activo o no) si el nombre coincide.
+   *
+   * @param {string[]} columnas  Nombres de columnas validados (literal de codigo).
+   * @param {string|null} texto  Texto que busca el usuario.
+   * @returns {Filtros} this
+   */
+  agregarBusquedaMulti(columnas, texto) {
+    const termino = typeof texto === 'string' ? texto.trim() : '';
+
+    if (termino === '') {
+      return this;
+    }
+
+    // Se descarta cualquier columna que no parezca identificador SQL.
+    // Se admite el alias opcional ("u.email") porque los listados con
+    // JOIN lo usan para desambiguar columnas con el mismo nombre.
+    const validas = columnas.filter((columna) =>
+      /^([a-zA-Z_][a-zA-Z0-9_]*\.)?[a-zA-Z_][a-zA-Z0-9_]*$/.test(columna)
+    );
+
+    if (validas.length === 0) {
+      throw new Error(`Columnas de busqueda no validas: ${columnas.join(', ')}`);
+    }
+
+    const clausula = `(${validas.map((columna) => `${columna} LIKE ?`).join(' OR ')})`;
+    const patron = `%${this.#escapar(termino)}%`;
+
+    this.#clausulas.push(clausula);
+    this.#parametros.push(...validas.map(() => patron));
+
+    return this;
+  }
+
+  /**
    * Escapa los caracteres especiales de LIKE: % _ y la barra invertida.
    * Se usa con la clausula ESCAPE de MySQL en quien llama, o con el
    * caracter de escape por defecto (barra invertida).
