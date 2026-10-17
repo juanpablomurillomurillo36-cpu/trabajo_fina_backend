@@ -76,6 +76,8 @@ const rutaVenta = require('../routes/venta.routes');
 
 const rutaProgramaPunto = require('../routes/programa-puntos.routes');
 
+const rutaReporte = require('../routes/reporte.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -206,6 +208,9 @@ function crearAplicacion() {
 
   // Programa de puntos RN-11 (fase 43).
   app.use('/api/puntos', rutaProgramaPunto);
+
+  // Reportes de desempeno RF-DES-01..10 (fases 45-48).
+  app.use('/api/reportes', rutaReporte);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);
