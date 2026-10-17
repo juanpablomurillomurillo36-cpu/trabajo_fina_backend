@@ -17,5 +17,8 @@ router.use(requiereAutenticacion, requierePermiso('reportes.consultar'));
 router.get('/top-clientes', reporteController.topClientes);
 router.get('/servicios-solicitados', reporteController.serviciosSolicitados);
 router.get('/productos-menos-vendidos', reporteController.productosMenosVendidos);
+router.get('/ventas-por-mes', reporteController.ventasPorMes);
+router.get('/ventas-mayor-menor', reporteController.ventasMayorMenor);
+router.get('/ventas-subtotales', reporteController.ventasSubtotales);
 
 module.exports = router;

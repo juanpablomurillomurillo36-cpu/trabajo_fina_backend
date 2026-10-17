@@ -19,6 +19,18 @@ const LIMITE_TOP = 10;
 // RF-DES-03 / RF-DES-04: mas y menos solicitados, 10 por lista.
 const LIMITE_SERVICIOS = 10;
 
+// Nombres de meses para los reportes que muestran "mes de mayor venta"
+// y subtotales (en espanol, igual que el resto de la API).
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+];
+
+/** {anio, mes} numericos -> 'agosto de 2026' (para exponer legible). */
+function aNombreMes(anio, mes) {
+  return `${MESES[Number(mes) - 1] ?? mes} de ${anio}`;
+}
+
 /**
  * Fila de servicio -> respuesta camelCase (compartida por las dos
  * listas del reporte de servicios).
@@ -109,6 +121,123 @@ class ReporteService {
         estado: fila.estado,
         unidadesVendidas: Number(fila.unidades_vendidas)
       }))
+    };
+  }
+
+  /**
+   * RF-DES-06: serie de ventas pagadas mes a mes.
+   * `anio` es opcional; si viene escrito y no es un entero valido se
+   * rechaza con 400 (no se ignora en silencio).
+   *
+   * @param {object} filtros  ?anio=
+   * @returns {Promise<object>} {anio|null, ventas:[...]}.
+   */
+  async ventasPorMes(filtros = {}) {
+    const colector = new ColectorErrores();
+    let anio = null;
+
+    if (filtros.anio !== undefined && filtros.anio !== '') {
+      anio = formato.aEnteroONulo(filtros.anio);
+      if (anio === null || anio < 2000 || anio > 2100) {
+        colector.agregar('anio', 'Debe ser un anio valido entre 2000 y 2100');
+      }
+    }
+    colector.lanzarSiHay();
+
+    const filas = await reporteRepository.ventasPorMes(anio);
+
+    return {
+      anio,
+      ventas: filas.map((fila) => ({
+        anio: Number(fila.anio),
+        mes: Number(fila.mes),
+        mesNombre: aNombreMes(fila.anio, fila.mes),
+        periodo: `${fila.anio}-${String(fila.mes).padStart(2, '0')}`,
+        total: formato.redondearDosDecimales(Number(fila.total)),
+        numeroVentas: Number(fila.numero_ventas)
+      }))
+    };
+  }
+
+  /**
+   * RF-DES-07 / RF-DES-08: dia y mes de mayor y menor venta.
+   * Si no hay ventas pagadas los cuatro bloques vienen en null.
+   *
+   * @returns {Promise<object>}
+   */
+  async mayorMenorVentas() {
+    const { mayorDia, menorDia, mayorMes, menorMes } =
+      await reporteRepository.mayorMenorVentas();
+
+    const aDia = (fila) =>
+      fila === null || fila === undefined
+        ? null
+        : {
+            fecha: formato.aFechaISO(fila.fecha)?.slice(0, 10) ?? fila.fecha,
+            total: formato.redondearDosDecimales(Number(fila.total)),
+            numeroVentas: Number(fila.numero_ventas)
+          };
+
+    const aMes = (fila) =>
+      fila === null || fila === undefined
+        ? null
+        : {
+            anio: Number(fila.anio),
+            mes: Number(fila.mes),
+            mesNombre: aNombreMes(fila.anio, fila.mes),
+            periodo: `${fila.anio}-${String(fila.mes).padStart(2, '0')}`,
+            total: formato.redondearDosDecimales(Number(fila.total)),
+            numeroVentas: Number(fila.numero_ventas)
+          };
+
+    return {
+      mayorDia: aDia(mayorDia),
+      menorDia: aDia(menorDia),
+      mayorMes: aMes(mayorMes),
+      menorMes: aMes(menorMes)
+    };
+  }
+
+  /**
+   * RF-DES-09: subtotales mensuales (base sin IVA) + IVA + total.
+   * Incluye el subtotal GENERAL de todas las ventas pagadas.
+   *
+   * @returns {Promise<object>} {subtotales:[...], subtotalGeneral:{...}}.
+   */
+  async ventasSubtotales() {
+    const filas = await reporteRepository.ventasSubtotales();
+
+    let acumuladoSubtotal = 0;
+    let acumuladoTotal = 0;
+    let acumuladoVentas = 0;
+
+    const subtotales = filas.map((fila) => {
+      const subtotal = Number(fila.subtotal);
+      const total = Number(fila.total);
+      acumuladoSubtotal += subtotal;
+      acumuladoTotal += total;
+      acumuladoVentas += Number(fila.numero_ventas);
+
+      return {
+        anio: Number(fila.anio),
+        mes: Number(fila.mes),
+        mesNombre: aNombreMes(fila.anio, fila.mes),
+        periodo: `${fila.anio}-${String(fila.mes).padStart(2, '0')}`,
+        subtotal: formato.redondearDosDecimales(subtotal),
+        iva: formato.redondearDosDecimales(Number(fila.iva)),
+        total: formato.redondearDosDecimales(total),
+        numeroVentas: Number(fila.numero_ventas)
+      };
+    });
+
+    return {
+      subtotales,
+      subtotalGeneral: {
+        subtotal: formato.redondearDosDecimales(acumuladoSubtotal),
+        iva: formato.redondearDosDecimales(acumuladoTotal - acumuladoSubtotal),
+        total: formato.redondearDosDecimales(acumuladoTotal),
+        numeroVentas: acumuladoVentas
+      }
     };
   }
 }

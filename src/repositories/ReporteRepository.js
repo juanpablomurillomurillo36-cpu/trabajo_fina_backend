@@ -7,6 +7,7 @@
  */
 
 const db = require('../config/database');
+const { Filtros } = require('../utils/consulta');
 
 class ReporteRepository {
   /**
@@ -144,6 +145,124 @@ class ReporteRepository {
          ) d ON d.id_producto = p.id_producto
         ORDER BY unidades_vendidas ASC, p.nombre ASC
         LIMIT 3`
+    );
+  }
+
+  /**
+   * RF-DES-06: ventas PAGADAS mes a mes (serie historica).
+   * Solo 'pagada': pendientes no son ingreso y las anuladas se
+   * devolvieron.
+   *
+   * @param {number|null} anio  filtro opcional de anio.
+   * @returns {Promise<object[]>} filas {anio, mes, total, numero_ventas}.
+   */
+  async ventasPorMes(anio = null) {
+    const filtros = new Filtros();
+    filtros.agregar("v.estado = 'pagada'");
+    if (anio !== null) filtros.agregar('YEAR(v.fecha_venta) = ?', anio);
+
+    return db.ejecutar(
+      `SELECT YEAR(v.fecha_venta) AS anio,
+              MONTH(v.fecha_venta) AS mes,
+              SUM(v.total) AS total,
+              COUNT(v.id_venta) AS numero_ventas
+         FROM ventas v
+        ${filtros.obtenerWhere()}
+        GROUP BY YEAR(v.fecha_venta), MONTH(v.fecha_venta)
+        ORDER BY anio ASC, mes ASC`,
+      filtros.obtenerParametros()
+    );
+  }
+
+  /**
+   * RF-DES-07 / RF-DES-08: dia y mes de MAYOR y MENOR venta (pagadas).
+   * Cuatro consultas simples con LIMIT 1; los empates los resuelve la
+   * fecha mas antigua (ASC) para que el reporte sea determinista.
+   *
+   * @returns {Promise<object>} {mayorDia, menorDia, mayorMes, menorMes}.
+   */
+  async mayorMenorVentas() {
+    const [mayorDia, menorDia, mayorMes, menorMes] = await Promise.all([
+      db.obtenerUno(
+        `SELECT DATE(v.fecha_venta) AS fecha,
+                SUM(v.total) AS total,
+                COUNT(v.id_venta) AS numero_ventas
+           FROM ventas v
+          WHERE v.estado = 'pagada'
+          GROUP BY DATE(v.fecha_venta)
+          ORDER BY total DESC, fecha ASC
+          LIMIT 1`
+      ),
+      db.obtenerUno(
+        `SELECT DATE(v.fecha_venta) AS fecha,
+                SUM(v.total) AS total,
+                COUNT(v.id_venta) AS numero_ventas
+           FROM ventas v
+          WHERE v.estado = 'pagada'
+          GROUP BY DATE(v.fecha_venta)
+          ORDER BY total ASC, fecha ASC
+          LIMIT 1`
+      ),
+      db.obtenerUno(
+        `SELECT YEAR(v.fecha_venta) AS anio,
+                MONTH(v.fecha_venta) AS mes,
+                SUM(v.total) AS total,
+                COUNT(v.id_venta) AS numero_ventas
+           FROM ventas v
+          WHERE v.estado = 'pagada'
+          GROUP BY YEAR(v.fecha_venta), MONTH(v.fecha_venta)
+          ORDER BY total DESC, anio ASC, mes ASC
+          LIMIT 1`
+      ),
+      db.obtenerUno(
+        `SELECT YEAR(v.fecha_venta) AS anio,
+                MONTH(v.fecha_venta) AS mes,
+                SUM(v.total) AS total,
+                COUNT(v.id_venta) AS numero_ventas
+           FROM ventas v
+          WHERE v.estado = 'pagada'
+          GROUP BY YEAR(v.fecha_venta), MONTH(v.fecha_venta)
+          ORDER BY total ASC, anio ASC, mes ASC
+          LIMIT 1`
+      )
+    ]);
+
+    return { mayorDia, menorDia, mayorMes, menorMes };
+  }
+
+  /**
+   * RF-DES-09: SUBTOTALES mensuales de ventas pagadas.
+   *
+   * La subconsulta calcula el subtotal de LINEAS por venta (SUM de
+   * detalle_ventas.subtotal = base sin IVA) ANTES de agrupar: si se
+   * hiciera un JOIN directo, `v.total` se repetiria una vez por linea
+   * y el total mensual quedaria multiplicado. Con esto:
+   *   subtotal (base) + iva = total facturado, por mes.
+   *
+   * @returns {Promise<object[]>} filas {anio, mes, subtotal, total,
+   *          iva, numero_ventas}.
+   */
+  async ventasSubtotales() {
+    return db.ejecutar(
+      `SELECT anio,
+              mes,
+              SUM(subtotal_linea) AS subtotal,
+              SUM(total_venta) AS total,
+              SUM(total_venta) - SUM(subtotal_linea) AS iva,
+              COUNT(id_venta) AS numero_ventas
+         FROM (
+           SELECT v.id_venta,
+                  YEAR(v.fecha_venta) AS anio,
+                  MONTH(v.fecha_venta) AS mes,
+                  v.total AS total_venta,
+                  (SELECT COALESCE(SUM(dv.subtotal), 0)
+                     FROM detalle_ventas dv
+                    WHERE dv.id_venta = v.id_venta) AS subtotal_linea
+             FROM ventas v
+            WHERE v.estado = 'pagada'
+         ) t
+        GROUP BY anio, mes
+        ORDER BY anio ASC, mes ASC`
     );
   }
 }

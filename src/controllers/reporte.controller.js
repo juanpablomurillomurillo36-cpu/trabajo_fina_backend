@@ -40,6 +40,36 @@ class ReporteController {
       datos: reporte
     });
   });
+
+  /** GET /api/reportes/ventas-por-mes?anio= (RF-DES-06) */
+  ventasPorMes = capturarAsync(async (req, res) => {
+    const reporte = await reporteService.ventasPorMes(req.query);
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.LISTA('Ventas mes a mes'),
+      datos: reporte
+    });
+  });
+
+  /** GET /api/reportes/ventas-mayor-menor (RF-DES-07/08) */
+  ventasMayorMenor = capturarAsync(async (req, res) => {
+    const reporte = await reporteService.mayorMenorVentas();
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.DETALLE('Ventas de mayor y menor dia/mes'),
+      datos: reporte
+    });
+  });
+
+  /** GET /api/reportes/ventas-subtotales (RF-DES-09) */
+  ventasSubtotales = capturarAsync(async (req, res) => {
+    const reporte = await reporteService.ventasSubtotales();
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.LISTA('Subtotales mensuales de ventas'),
+      datos: reporte
+    });
+  });
 }
 
 // Singleton.
