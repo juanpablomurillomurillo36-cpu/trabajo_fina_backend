@@ -154,6 +154,7 @@ const MENSAJES = Object.freeze({
     VENTA_SIN_DETALLES: 'La venta debe tener al menos un producto',
     VENTA_NO_PAGABLE: 'Solo se pueden pagar ventas en estado pendiente',
     VENTA_NO_ANULABLE: 'Solo se pueden anular ventas pendientes o pagadas',
+    VENTA_NO_EDITABLE: 'Solo se pueden editar o eliminar ventas pendientes',
 
     // RN-11 puntos
     PUNTOS_INSUFICIENTES: (necesarios, actuales) =>

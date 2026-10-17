@@ -72,6 +72,8 @@ const rutaAgendaEvento = require('../routes/agendaEvento.routes');
 
 const rutaNotificacion = require('../routes/notificacion.routes');
 
+const rutaVenta = require('../routes/venta.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -196,6 +198,9 @@ function crearAplicacion() {
 
   // Notificaciones simuladas RN-12 (fase 40).
   app.use('/api/notificaciones', rutaNotificacion);
+
+  // Ventas al publico (composicion venta+detalle, fase 41).
+  app.use('/api/ventas', rutaVenta);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

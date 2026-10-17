@@ -42,6 +42,8 @@ const FichaTecnica = require('./FichaTecnica');
 const FichaServicio = require('./FichaServicio');
 const AgendaEvento = require('./AgendaEvento');
 const Notificacion = require('./Notificacion');
+const Venta = require('./Venta');
+const DetalleVenta = require('./DetalleVenta');
 
 module.exports = {
   Rol,
@@ -66,5 +68,7 @@ module.exports = {
   FichaTecnica,
   FichaServicio,
   AgendaEvento,
-  Notificacion
+  Notificacion,
+  Venta,
+  DetalleVenta
 };
