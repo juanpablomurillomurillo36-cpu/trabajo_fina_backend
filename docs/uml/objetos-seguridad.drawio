@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-10-17T00:00:00.000Z" agent="discoteca-api" version="24.7.7" type="device">
+  <diagram id="objetos-seguridad" name="Escenario 1 · Seguridad — 13 objetos (usuario → rol → permiso)">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="titulo" value="Escenario 1 · Seguridad — 13 objetos (usuario → rol → permiso)" style="text;html=1;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="1100" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitulo" value="Notación UML de objetos · valores coherentes con database/03_seed.sql y la colección Postman" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="52" width="1100" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="u1" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;usuario1 : Usuario&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombre = 'Ana Admin'&lt;br&gt;email = 'admin@correo.mx'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="110" width="280" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="u2" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;usuario2 : Usuario&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombre = 'Diego Rivas'&lt;br&gt;email = 'empleado@correo.mx'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="280" width="280" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="u3" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;usuario3 : Usuario&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombre = 'Lucia Mendoza'&lt;br&gt;email = 'cliente@correo.mx'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="450" width="280" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;rol1 : Rol&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombreRol = 'administrador'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="470" y="118" width="250" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;rol2 : Rol&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombreRol = 'empleado'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="470" y="288" width="250" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;rol3 : Rol&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombreRol = 'cliente'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="470" y="458" width="250" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p1" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;permiso1 : Permiso&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombrePermiso = 'ventas.gestionar'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="60" width="330" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;permiso2 : Permiso&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombrePermiso = 'ventas.registrar'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="160" width="330" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;permiso3 : Permiso&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombrePermiso = 'reservas.gestionar'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="260" width="330" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p4" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;permiso4 : Permiso&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombrePermiso = 'reportes.consultar'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="360" width="330" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p5" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;permiso5 : Permiso&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombrePermiso = 'usuarios.gestionar'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="460" width="330" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p6" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;permiso6 : Permiso&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombrePermiso = 'bitacora.consultar'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="560" width="330" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p7" value="&lt;div style=&quot;text-decoration:underline&quot;&gt;&lt;b&gt;permiso7 : Permiso&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align:left&quot;&gt;nombrePermiso = 'ingresos.gestionar'&lt;br&gt;estado = 'activo'&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=10;spacingRight=8;fontSize=13;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="660" width="330" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="u1" target="r1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="u2" target="r2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="u3" target="r3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r1" target="p1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r1" target="p5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r1" target="p6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r2" target="p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r2" target="p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r2" target="p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=none;endArrow=none;html=1;strokeColor=#333333;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r2" target="p7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nota0" value="rol cliente: 0 permisos en la semilla (ningún enlace a permisos)" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=2;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="470" y="562" width="420" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="nota1" value="El administrador posee los 19 permisos de la tabla permisos (rol_permiso = CROSS JOIN en la semilla)." style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=2;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="60" y="770" width="900" height="26" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
