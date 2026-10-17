@@ -12,6 +12,7 @@
 const reporteRepository = require('../repositories/ReporteRepository');
 const formato = require('../utils/formato');
 const { ColectorErrores } = require('../utils/validadores');
+const { TIPO_EVENTO } = require('../utils/constants');
 
 const TIPOS_TOP = ['vip', 'general'];
 // RF-DES-01 / RF-DES-02: el ranking es SIEMPRE Top 10.
@@ -237,6 +238,57 @@ class ReporteService {
         iva: formato.redondearDosDecimales(acumuladoTotal - acumuladoSubtotal),
         total: formato.redondearDosDecimales(acumuladoTotal),
         numeroVentas: acumuladoVentas
+      }
+    };
+  }
+
+  /**
+   * RF-DES-10: comparativo eventos tematicos vs fiestas privadas.
+   * Los tipos SALEN DE LAS CONSTANTES, no solo de la BD: si un tipo
+   * aun no tiene eventos, aparece con ceros para que el comparativo
+   * siempre muestre las dos columnas.
+   *
+   * @returns {Promise<object>} {tipos:[tematico, fiesta_privada], resumen}.
+   */
+  async comparativoEventos() {
+    const filas = await reporteRepository.comparativoEventos();
+    const porTipo = new Map(filas.map((fila) => [fila.tipo_evento, fila]));
+
+    const etiquetas = {
+      [TIPO_EVENTO.TEMATICO]: 'Eventos tematicos',
+      [TIPO_EVENTO.FIESTA_PRIVADA]: 'Fiestas privadas'
+    };
+
+    const tipos = Object.values(TIPO_EVENTO).map((tipo) => {
+      const fila = porTipo.get(tipo);
+      const numeroEventos = Number(fila?.numero_eventos ?? 0);
+      const asistenciaTotal = Number(fila?.asistencia_total ?? 0);
+
+      return {
+        tipo,
+        etiqueta: etiquetas[tipo],
+        numeroEventos,
+        asistenciaTotal,
+        asistenciaPromedio: numeroEventos === 0
+          ? 0
+          : formato.redondearDosDecimales(asistenciaTotal / numeroEventos)
+      };
+    });
+
+    const [tematicos, fiestas] = tipos;
+
+    return {
+      metrica: 'asistencia aproximada por fecha de evento (ingresos validos)',
+      tipos,
+      resumen: {
+        diferenciaEventos: tematicos.numeroEventos - fiestas.numeroEventos,
+        diferenciaAsistencia: tematicos.asistenciaTotal - fiestas.asistenciaTotal,
+        predominante:
+          tematicos.numeroEventos === fiestas.numeroEventos
+            ? 'empate'
+            : tematicos.numeroEventos > fiestas.numeroEventos
+              ? TIPO_EVENTO.TEMATICO
+              : TIPO_EVENTO.FIESTA_PRIVADA
       }
     };
   }

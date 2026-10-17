@@ -253,6 +253,41 @@ ALTER TABLE reservas
 
 ---
 
+### C-07 — Campo `tipo_evento` en `evento` · ✅ aplicado (Fase 48) · **Criterio C1 (RF-DES-10)**
+
+**Qué:** columna `tipo_evento ENUM('tematico','fiesta_privada') NOT NULL
+DEFAULT 'tematico'` en la tabla `evento`, después de `tematica`.
+
+**Por qué:** el RF-DES-10 pide un **comparativo entre eventos temáticos y
+fiestas privadas**, y la tabla `evento` no distinguía jamás los dos tipos
+(solo nombre/temática/fecha/estado). Sin la columna el comparativo no
+existe: no hay cómo filtrar ni agrupar. La rúbrica C1 exige implementar el
+alcance completo de los RF, y la fase 48 del plan incluye este comparativo.
+
+**SQL ejecutado (como `root`; `discoteca_app` no tiene ALTER — C-04):**
+
+```sql
+ALTER TABLE evento
+  ADD COLUMN tipo_evento ENUM('tematico','fiesta_privada') NOT NULL
+    DEFAULT 'tematico'
+    COMMENT 'tematico = evento con tematica; fiesta_privada = reserva privada del local'
+    AFTER tematica;
+```
+
+**Decisiones de diseño:**
+
+| Decisión | Motivo |
+|---|---|
+| `DEFAULT 'tematico'` | Los 26+ eventos existentes siguen siendo válidos sin UPDATE retroactivo |
+| `ENUM` (no `VARCHAR`) | Consistente con el resto de estados/tipos del esquema; el dominio son exactamente 2 valores |
+| Opcional en el body | `POST/PUT /api/eventos` lo omite → se respeta el actual o el default; si viene, valida contra la lista → 400 |
+| Asistencia por fecha en el comparativo | `ingresos` no tiene FK a `evento` (el esquema no lo previó): se cuentan los ingresos válidos del mismo día que el evento como aproximación del público; queda documentado en la respuesta del reporte |
+
+**Estado actual de `discoteca_api` (tras esta columna):** 28 tablas,
+29 claves foráneas (sin tablas nuevas; solo 1 columna agregada).
+
+---
+
 ## 3. CAMBIOS PLANEADOS (se ejecutarán en su fase)
 
 ### C-01 — Crear tabla `bitacora` · **Fase 10** · **Criterio C8**

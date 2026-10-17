@@ -7,12 +7,13 @@
  * eventos llegan en las fases 39 y 40.
  */
 
-const { ESTADO_EVENTO } = require('../utils/constants');
+const { ESTADO_EVENTO, TIPO_EVENTO } = require('../utils/constants');
 
 class Evento {
   #idEvento;
   #nombre;
   #tematica;
+  #tipoEvento;
   #fecha;
   #horaInicio;
   #horaFin;
@@ -22,6 +23,7 @@ class Evento {
     id = null,
     nombre = null,
     tematica = null,
+    tipoEvento = TIPO_EVENTO.TEMATICO,
     fecha = null,
     horaInicio = null,
     horaFin = null,
@@ -30,6 +32,7 @@ class Evento {
     this.#idEvento = id;
     this.#nombre = nombre;
     this.#tematica = tematica;
+    this.#tipoEvento = tipoEvento ?? TIPO_EVENTO.TEMATICO;
     this.#fecha = fecha;
     this.#horaInicio = horaInicio;
     this.#horaFin = horaFin;
@@ -54,6 +57,14 @@ class Evento {
 
   set tematica(valor) {
     this.#tematica = valor;
+  }
+
+  get tipoEvento() {
+    return this.#tipoEvento;
+  }
+
+  set tipoEvento(valor) {
+    this.#tipoEvento = valor;
   }
 
   get fecha() {
@@ -95,6 +106,7 @@ class Evento {
       fila.id_evento,
       fila.nombre,
       fila.tematica,
+      fila.tipo_evento ?? TIPO_EVENTO.TEMATICO,
       fila.fecha,
       fila.hora_inicio,
       fila.hora_fin,
@@ -107,6 +119,7 @@ class Evento {
       datos.id ?? null,
       datos.nombre ?? null,
       datos.tematica ?? null,
+      datos.tipoEvento ?? TIPO_EVENTO.TEMATICO,
       datos.fecha ?? null,
       datos.horaInicio ?? null,
       datos.horaFin ?? null,
@@ -118,6 +131,7 @@ class Evento {
     return {
       nombre: this.#nombre,
       tematica: this.#tematica,
+      tipo_evento: this.#tipoEvento,
       fecha: this.#fecha,
       hora_inicio: this.#horaInicio,
       hora_fin: this.#horaFin,
@@ -130,6 +144,7 @@ class Evento {
       id: this.#idEvento,
       nombre: this.#nombre,
       tematica: this.#tematica,
+      tipoEvento: this.#tipoEvento,
       fecha: this.#fecha,
       horaInicio: this.#horaInicio,
       horaFin: this.#horaFin,

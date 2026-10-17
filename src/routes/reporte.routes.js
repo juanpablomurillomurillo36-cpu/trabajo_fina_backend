@@ -20,5 +20,6 @@ router.get('/productos-menos-vendidos', reporteController.productosMenosVendidos
 router.get('/ventas-por-mes', reporteController.ventasPorMes);
 router.get('/ventas-mayor-menor', reporteController.ventasMayorMenor);
 router.get('/ventas-subtotales', reporteController.ventasSubtotales);
+router.get('/comparativo-eventos', reporteController.comparativoEventos);
 
 module.exports = router;

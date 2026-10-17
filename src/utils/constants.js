@@ -67,6 +67,13 @@ const ESTADO_EVENTO = Object.freeze({
   CANCELADO: 'cancelado'
 });
 
+// Columna evento.tipo_evento (C-07, fase 48): permite el comparativo
+// RF-DES-10 entre eventos tematicos y fiestas privadas.
+const TIPO_EVENTO = Object.freeze({
+  TEMATICO: 'tematico',
+  FIESTA_PRIVADA: 'fiesta_privada'
+});
+
 // ---------------------------------------------------------------------
 // AGENDAS (agenda_empleados.estado y agenda_eventos.estado)
 // ---------------------------------------------------------------------
@@ -245,6 +252,7 @@ module.exports = {
   ESTADO_RESERVA,
   ESTADO_VENTA,
   ESTADO_EVENTO,
+  TIPO_EVENTO,
   ESTADO_AGENDA,
   ESTADO_INGRESO,
   TIPO_ACCION_ACCESO,

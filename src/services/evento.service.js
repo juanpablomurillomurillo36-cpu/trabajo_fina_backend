@@ -12,6 +12,8 @@
  * ficha tecnica -> 409 FICHA_NO_ELIMINABLE (la ficha se borra primero
  * con DELETE /api/eventos/:id/ficha).
  *  Fase 40 agrega agenda + notificaciones.
+ *  Fase 48 agrega tipo_evento (C-07): tematico | fiesta_privada,
+ *  con 'tematico' por defecto, para el comparativo RF-DES-10.
  *  Sin try/catch (R-ASYNC).
  */
 
@@ -22,9 +24,10 @@ const MENSAJES = require('../utils/mensajes');
 const formato = require('../utils/formato');
 const fechas = require('../utils/fechas');
 const { ColectorErrores } = require('../utils/validadores');
-const { ESTADO_EVENTO, LIMITES } = require('../utils/constants');
+const { ESTADO_EVENTO, TIPO_EVENTO, LIMITES } = require('../utils/constants');
 
 const ESTADOS_PERMITIDOS = Object.values(ESTADO_EVENTO);
+const TIPOS_PERMITIDOS = Object.values(TIPO_EVENTO);
 // Columnas de la tabla: nombre y tematica VARCHAR(150).
 const MAXIMO_NOMBRE = 150;
 const MAXIMO_TEMATICA = 150;
@@ -32,13 +35,26 @@ const MAXIMO_TEMATICA = 150;
 /**
  * @param {object} cuerpo
  * @param {string} [estadoActual]  Se conserva en PUT si el body no trae estado.
+ * @param {string} [tipoActual]    Se conserva en PUT si el body no trae tipoEvento.
  * @returns {Promise<object>} datos snake_case.
  */
-function preparar(cuerpo, estadoActual = ESTADO_EVENTO.PROGRAMADO) {
+function preparar(
+  cuerpo,
+  estadoActual = ESTADO_EVENTO.PROGRAMADO,
+  tipoActual = TIPO_EVENTO.TEMATICO
+) {
   const colector = new ColectorErrores();
 
   colector.exigirTexto('nombre', cuerpo?.nombre, { requerido: true, maximo: MAXIMO_NOMBRE });
   colector.exigirTexto('tematica', cuerpo?.tematica, { requerido: false, maximo: MAXIMO_TEMATICA });
+
+  // tipo_evento opcional: si no viene se respeta el actual (PUT) o el
+  // valor por defecto 'tematico' (POST).
+  let tipoEvento = tipoActual;
+  if (cuerpo?.tipoEvento !== undefined && cuerpo.tipoEvento !== null && cuerpo.tipoEvento !== '') {
+    colector.exigirValorDeLista('tipoEvento', cuerpo.tipoEvento, TIPOS_PERMITIDOS);
+    tipoEvento = cuerpo.tipoEvento;
+  }
 
   colector.exigirFecha('fecha', cuerpo?.fecha, {
     requerido: true,
@@ -67,6 +83,7 @@ function preparar(cuerpo, estadoActual = ESTADO_EVENTO.PROGRAMADO) {
   return {
     nombre: formato.limpiarTexto(cuerpo?.nombre) || '',
     tematica: formato.limpiarTexto(cuerpo?.tematica) || null,
+    tipo_evento: tipoEvento,
     fecha: iso === null ? null : iso.slice(0, 10),
     hora_inicio: horaInicio,
     hora_fin: horaFin,
@@ -84,11 +101,12 @@ class EventoService {
     );
 
     const estado = ESTADOS_PERMITIDOS.includes(filtros.estado) ? filtros.estado : null;
+    const tipo = TIPOS_PERMITIDOS.includes(filtros.tipo) ? filtros.tipo : null;
     const fechaIso = fechas.aFechaISO(filtros.fecha);
     const fecha = fechaIso === null ? null : fechaIso.slice(0, 10);
     const busqueda = formato.limpiarTexto(filtros.busqueda ?? filtros.buscar);
 
-    const { total, filas } = await eventoRepository.listar({ estado, fecha, busqueda, pagina, limite });
+    const { total, filas } = await eventoRepository.listar({ estado, tipo, fecha, busqueda, pagina, limite });
     return { eventos: filas, total, pagina, limite };
   }
 
@@ -114,7 +132,7 @@ class EventoService {
 
   async actualizar(id, cuerpo) {
     const actual = await this.obtenerPorId(id);
-    const datos = preparar(cuerpo, actual.estado);
+    const datos = preparar(cuerpo, actual.estado, actual.tipoEvento);
     await eventoRepository.actualizar(id, datos);
     return this.obtenerPorId(id);
   }

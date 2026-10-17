@@ -10,10 +10,11 @@ const { Filtros } = require('../utils/consulta');
 
 class EventoRepository {
   /** @returns {Promise<{total:number, filas:Evento[]}>} */
-  async listar({ estado, fecha, busqueda, pagina, limite } = {}) {
+  async listar({ estado, tipo, fecha, busqueda, pagina, limite } = {}) {
     const filtros = new Filtros();
 
     if (estado) filtros.agregar('estado = ?', estado);
+    if (tipo) filtros.agregar('tipo_evento = ?', tipo);
     if (fecha) filtros.agregar('fecha = ?', fecha);
     if (busqueda) filtros.agregarBusquedaMulti(['nombre', 'tematica'], busqueda);
 
@@ -55,9 +56,9 @@ class EventoRepository {
 
   async crear(fila) {
     const resultado = await db.ejecutar(
-      `INSERT INTO evento (nombre, tematica, fecha, hora_inicio, hora_fin, estado)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [fila.nombre, fila.tematica, fila.fecha, fila.hora_inicio, fila.hora_fin, fila.estado]
+      `INSERT INTO evento (nombre, tematica, tipo_evento, fecha, hora_inicio, hora_fin, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [fila.nombre, fila.tematica, fila.tipo_evento, fila.fecha, fila.hora_inicio, fila.hora_fin, fila.estado]
     );
     return resultado.insertId;
   }
@@ -65,9 +66,9 @@ class EventoRepository {
   async actualizar(id, fila) {
     const resultado = await db.ejecutar(
       `UPDATE evento
-          SET nombre = ?, tematica = ?, fecha = ?, hora_inicio = ?, hora_fin = ?, estado = ?
+          SET nombre = ?, tematica = ?, tipo_evento = ?, fecha = ?, hora_inicio = ?, hora_fin = ?, estado = ?
         WHERE id_evento = ?`,
-      [fila.nombre, fila.tematica, fila.fecha, fila.hora_inicio, fila.hora_fin, fila.estado, id]
+      [fila.nombre, fila.tematica, fila.tipo_evento, fila.fecha, fila.hora_inicio, fila.hora_fin, fila.estado, id]
     );
     return resultado.affectedRows > 0;
   }

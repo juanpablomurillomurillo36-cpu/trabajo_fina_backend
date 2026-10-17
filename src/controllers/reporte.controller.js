@@ -70,6 +70,16 @@ class ReporteController {
       datos: reporte
     });
   });
+
+  /** GET /api/reportes/comparativo-eventos (RF-DES-10) */
+  comparativoEventos = capturarAsync(async (req, res) => {
+    const reporte = await reporteService.comparativoEventos();
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.DETALLE('Comparativo eventos vs fiestas privadas'),
+      datos: reporte
+    });
+  });
 }
 
 // Singleton.

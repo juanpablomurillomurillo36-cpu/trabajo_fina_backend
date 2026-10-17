@@ -265,6 +265,35 @@ class ReporteRepository {
         ORDER BY anio ASC, mes ASC`
     );
   }
+
+  /**
+   * RF-DES-10: comparativo entre eventos tematicos y fiestas privadas
+   * (columna `tipo_evento`, C-07).
+   *
+   * Metricas por tipo:
+   *  - numero de eventos;
+   *  - asistencia: ingresos VALIDOS del mismo dia que el evento. Es
+   *    una APROXIMACION deliberada: `ingresos` no tiene FK al evento
+   *    (el esquema no lo previo), asi que se cuentan las entradas de
+   *    la fecha del evento como su publico.
+   *
+   * @returns {Promise<object[]>} filas {tipo_evento, numero_eventos,
+   *          asistencia_total}; solo aparecen los tipos con eventos.
+   */
+  async comparativoEventos() {
+    return db.ejecutar(
+      `SELECT e.tipo_evento,
+              COUNT(*) AS numero_eventos,
+              COALESCE(SUM(
+                (SELECT COUNT(*)
+                   FROM ingresos i
+                  WHERE i.estado = 'valido'
+                    AND i.fecha = e.fecha)
+              ), 0) AS asistencia_total
+         FROM evento e
+        GROUP BY e.tipo_evento`
+    );
+  }
 }
 
 // Singleton.
