@@ -1,4 +1,4 @@
-/**
+ /**
  * src/models/Acceso.js
  * ---------------------------------------------------------------------
  * ENTIDAD Acceso -> tabla `accesos` de la base de datos.
