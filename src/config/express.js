@@ -58,6 +58,8 @@ const rutaCliente = require('../routes/cliente.routes');
 
 const rutaCompra = require('../routes/compra.routes');
 
+const rutaInventario = require('../routes/inventario.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -161,6 +163,9 @@ function crearAplicacion() {
 
   // Compras a proveedores (composicion compra+detalles).
   app.use('/api/compras', rutaCompra);
+
+  // Inventario: alertas de stock minimo (RN-03).
+  app.use('/api/inventario', rutaInventario);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);
