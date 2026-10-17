@@ -73,6 +73,24 @@ class ReservaController {
     });
   });
 
+  /** PATCH /api/reservas/:id/estado  (confirmar o cancelar) */
+  cambiarEstado = capturarAsync(async (req, res) => {
+    const id = req.idsValidados.id;
+    const reserva = await reservaService.cambiarEstado(id, req.body);
+
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: TABLA,
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: id,
+      detalle: `Estado de la reserva #${id}: ahora "${reserva.estado}"`
+    });
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Cambio de estado'),
+      datos: reserva
+    });
+  });
+
   /** DELETE /api/reservas/:id */
   eliminar = capturarAsync(async (req, res) => {
     const id = req.idsValidados.id;

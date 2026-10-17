@@ -14,7 +14,13 @@
  *    y solo aplica con >= 3 servicios -> 400; si NO viene, se calcula
  *    automatico 10% cuando hay 3 o mas servicios.
  *  - solo reservas PENDIENTES se editan o eliminan -> 409.
- *  La fase 34 agregara el control de conflicto de horario (409).
+ *
+ * Reglas de la fase 34:
+ *  - CONFLICTO de horario/espacio: ya existe reserva para ese espacio
+ *    en esa fecha y hora -> 409 CONFLICTO_HORARIO (version amigable del
+ *    indice unico; revisada DESPUES del colector: 400 -> 409).
+ *  - cambiar estado: confirmar solo desde pendiente (409); cancelar
+ *    desde pendiente o confirmada (409 si ya estaba cancelada).
  *  Sin try/catch (R-ASYNC).
  */
 
@@ -42,9 +48,11 @@ const MAXIMO_IDENTIFICADOR = 30;
  *
  * @param {object} cuerpo
  * @param {string} [estadoInicial]
+ * @param {number|null} [idActual]  Reserva en edicion (para excluir su
+ *                                  propio id del chequeo de conflicto).
  * @returns {Promise<{datos:object, detalles:DetalleReserva[]}>}
  */
-async function preparar(cuerpo, estadoInicial = ESTADO_RESERVA.PENDIENTE) {
+async function preparar(cuerpo, estadoInicial = ESTADO_RESERVA.PENDIENTE, idActual = null) {
   const colector = new ColectorErrores();
 
   // --- cliente ---------------------------------------------------------
@@ -177,6 +185,27 @@ async function preparar(cuerpo, estadoInicial = ESTADO_RESERVA.PENDIENTE) {
   datos.subtotal = formato.redondearDosDecimales(subtotal);
   datos.descuento = formato.redondearDosDecimales(descuento);
 
+  // --- 409: conflicto de horario/espacio (fase 34) ----------------------
+  // Se comprueba DESPUES del colector: primero 400, luego 409.
+  const hayConflicto = await reservaRepository.existeConflicto(
+    {
+      tipoEspacio: datos.tipo_espacio,
+      identificadorEspacio: datos.identificador_espacio,
+      fecha: datos.fecha,
+      hora: datos.hora
+    },
+    idActual
+  );
+
+  if (hayConflicto) {
+    throw AppError.conflicto(MENSAJES.NEGOCIO.CONFLICTO_HORARIO, [
+      {
+        campo: 'hora',
+        mensaje: MENSAJES.NEGOCIO.CONFLICTO_HORARIO
+      }
+    ]);
+  }
+
   return { datos, detalles };
 }
 
@@ -235,8 +264,38 @@ class ReservaService {
       throw AppError.conflicto(MENSAJES.NEGOCIO.RESERVA_NO_EDITABLE);
     }
 
-    const { datos, detalles } = await preparar(cuerpo, actual.estado);
+    const { datos, detalles } = await preparar(cuerpo, actual.estado, id);
     await reservaRepository.actualizarConDetalles(id, datos, detalles);
+    return this.obtenerConDetalles(id);
+  }
+
+  /**
+   * Cambiar estado (fase 34): 'confirmada' o 'cancelada'.
+   *  - confirmar: solo desde 'pendiente' -> 409.
+   *  - cancelar: desde 'pendiente' o 'confirmada' -> 409 si ya estaba
+   *    cancelada (mensaje RESERVA_NO_CANCELABLE).
+   */
+  async cambiarEstado(id, cuerpo) {
+    const reserva = await this.obtenerPorId(id);
+
+    const colector = new ColectorErrores();
+    colector.exigirValorDeLista('estado', cuerpo?.estado, [
+      ESTADO_RESERVA.CONFIRMADA,
+      ESTADO_RESERVA.CANCELADA
+    ]);
+    colector.lanzarSiHay();
+
+    const destino = cuerpo.estado;
+
+    if (destino === ESTADO_RESERVA.CONFIRMADA && reserva.estado !== ESTADO_RESERVA.PENDIENTE) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.RESERVA_NO_CONFIRMABLE);
+    }
+
+    if (destino === ESTADO_RESERVA.CANCELADA && reserva.estado === ESTADO_RESERVA.CANCELADA) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.RESERVA_NO_CANCELABLE);
+    }
+
+    await reservaRepository.cambiarEstado(id, destino);
     return this.obtenerConDetalles(id);
   }
 

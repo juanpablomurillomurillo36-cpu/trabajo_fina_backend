@@ -145,6 +145,33 @@ class ReservaRepository {
     });
   }
 
+  /**
+   * ¿Existe ya una reserva para MISMO espacio + fecha + hora? Es la
+   * version amigable (409) del indice unico uq_reserva_espacio_horario:
+   * se avisa ANTES de que MySQL rechace el INSERT. Cualquier estado
+   * cuenta, exactamente igual que el indice (una reserva cancelada
+   * conserva su llave y sigue bloqueando ese horario).
+   *
+   * @param {object} datos
+   * @param {number|null} [idExcluido]  Reserva que se ignora (edicion).
+   * @returns {Promise<boolean>}
+   */
+  async existeConflicto({ tipoEspacio, identificadorEspacio, fecha, hora }, idExcluido = null) {
+    const sql = idExcluido
+      ? `SELECT 1 AS existe FROM reservas
+          WHERE tipo_espacio = ? AND identificador_espacio = ?
+            AND fecha = ? AND hora = ? AND id_reserva <> ?`
+      : `SELECT 1 AS existe FROM reservas
+          WHERE tipo_espacio = ? AND identificador_espacio = ?
+            AND fecha = ? AND hora = ?`;
+
+    const parametros = [tipoEspacio, identificadorEspacio, fecha, hora];
+    if (idExcluido) parametros.push(idExcluido);
+
+    const fila = await db.obtenerUno(sql, parametros);
+    return Boolean(fila);
+  }
+
   async cambiarEstado(id, estado) {
     const resultado = await db.ejecutar(
       'UPDATE reservas SET estado = ? WHERE id_reserva = ?',

@@ -127,6 +127,7 @@ const MENSAJES = Object.freeze({
     RESERVA_SIN_DETALLES: 'La reserva debe incluir al menos un servicio',
     RESERVA_NO_EDITABLE: 'Solo se pueden editar o eliminar reservas pendientes',
     RESERVA_NO_CANCELABLE: 'Solo se pueden cancelar reservas pendientes o confirmadas',
+    RESERVA_NO_CONFIRMABLE: 'Solo se pueden confirmar reservas pendientes',
     RESERVA_YA_INGRESADA: 'El codigo QR de esta reserva ya fue utilizado',
     TURNO_SUPERPUESTO: 'El empleado ya tiene un turno que se superpone en esa fecha',
 
