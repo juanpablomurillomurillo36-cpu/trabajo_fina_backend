@@ -91,6 +91,28 @@ class ReservaController {
     });
   });
 
+  /** POST /api/reservas/:id/qr  (codigo unico + imagen QR) */
+  generarQr = capturarAsync(async (req, res) => {
+    const id = req.idsValidados.id;
+    const { codigo, imagen, generado } = await reservaService.generarQr(id);
+
+    // Solo bitacora cuando AQUI nacio el codigo (la confirmacion ya
+    // dejo su propio registro al cambiar de estado).
+    if (generado) {
+      await bitacoraService.registrarDesdeReq(req, {
+        tabla: TABLA,
+        accion: ACCION_BITACORA.EDICION,
+        idRegistro: id,
+        detalle: `Codigo QR ${codigo} generado para la reserva #${id}`
+      });
+    }
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Generacion del codigo QR'),
+      datos: { codigo, imagen }
+    });
+  });
+
   /** DELETE /api/reservas/:id */
   eliminar = capturarAsync(async (req, res) => {
     const id = req.idsValidados.id;

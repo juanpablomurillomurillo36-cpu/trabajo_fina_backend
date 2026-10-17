@@ -172,6 +172,22 @@ class ReservaRepository {
     return Boolean(fila);
   }
 
+  /**
+   * Guarda el codigo unico del QR SOLO si la reserva no tenia
+   * (el indice uq_reservas_codigo_qr seria la red de seguridad).
+   *
+   * @param {number} id
+   * @param {string} codigo
+   * @returns {Promise<boolean>} true si se genero ahora.
+   */
+  async guardarCodigoQr(id, codigo) {
+    const resultado = await db.ejecutar(
+      'UPDATE reservas SET codigo_qr = ? WHERE id_reserva = ? AND codigo_qr IS NULL',
+      [codigo, id]
+    );
+    return resultado.affectedRows > 0;
+  }
+
   async cambiarEstado(id, estado) {
     const resultado = await db.ejecutar(
       'UPDATE reservas SET estado = ? WHERE id_reserva = ?',

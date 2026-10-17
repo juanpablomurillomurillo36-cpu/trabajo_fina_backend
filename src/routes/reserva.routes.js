@@ -19,6 +19,7 @@ router.get('/:id', validarIdNumerico('id'), reservaController.obtenerPorId);
 router.post('/', reservaController.crear);
 router.put('/:id', validarIdNumerico('id'), reservaController.actualizar);
 router.patch('/:id/estado', validarIdNumerico('id'), reservaController.cambiarEstado);
+router.post('/:id/qr', validarIdNumerico('id'), reservaController.generarQr);
 router.delete('/:id', validarIdNumerico('id'), reservaController.eliminar);
 
 module.exports = router;

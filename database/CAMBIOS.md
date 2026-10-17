@@ -217,6 +217,42 @@ CREATE TABLE codigos_recuperacion (
 
 ---
 
+### C-06 — Campo `codigo_qr` en `reservas` · ✅ aplicado (Fase 35) · **Criterio C1 (RN-02)**
+
+**Qué:** columna `codigo_qr VARCHAR(100) NULL` con llave única
+`uq_reservas_codigo_qr` en la tabla `reservas`.
+
+**Por qué:** el RN-02 pide entregar el ingreso con **QR** de la reserva.
+La tabla `reservas` nació sin columna donde guardar el código que
+representa al QR, y `ingresos.codigo_qr` solo sirve para registrar el
+código YA escaneado al momento de entrar (es registro de acceso, no
+generador). Sin esta columna no hay dónde persistir el código único de
+cada reserva; se genera al confirmarla y nunca se repite gracias al
+índice único (si dos generaciones collisionsen, MySQL rechaza la
+segunda).
+
+**SQL ejecutado (como `root`; la cuenta `discoteca_app` no tiene
+permiso ALTER por diseño — C-04):**
+
+```sql
+ALTER TABLE reservas
+  ADD COLUMN codigo_qr VARCHAR(100) NULL
+    COMMENT 'Codigo unico del QR de la reserva; se genera al confirmar'
+    AFTER estado,
+  ADD UNIQUE KEY uq_reservas_codigo_qr (codigo_qr);
+```
+
+**Decisiones de diseño:**
+
+| Decisión | Motivo |
+|---|---|
+| `NULL` por defecto | Solo las reservas confirmadas tienen QR; pendientes/canceladas no |
+| Índice `UNIQUE` | Un código jamás se reutiliza entre reservas (RN-02) |
+| Se genera al confirmar | El QR nace cuando la reserva es válida; canceladas no generan QR |
+| Tamaño 100 | Coincide con `ingresos.codigo_qr` (el mismo código viaja de una a otra) |
+
+---
+
 ## 3. CAMBIOS PLANEADOS (se ejecutarán en su fase)
 
 ### C-01 — Crear tabla `bitacora` · **Fase 10** · **Criterio C8**

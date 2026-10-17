@@ -21,6 +21,7 @@ class Reserva {
   #descuento;
   #subtotal;
   #estado;
+  #codigoQr;
   #nombreCliente;
   #detalles;
 
@@ -33,7 +34,8 @@ class Reserva {
     hora = null,
     descuento = 0,
     subtotal = 0,
-    estado = ESTADO_RESERVA.PENDIENTE
+    estado = ESTADO_RESERVA.PENDIENTE,
+    codigoQr = null
   ) {
     this.#idReserva = id;
     this.#idCliente = idCliente;
@@ -44,6 +46,7 @@ class Reserva {
     this.#descuento = descuento;
     this.#subtotal = subtotal;
     this.#estado = estado;
+    this.#codigoQr = codigoQr;
     this.#nombreCliente = null;
     this.#detalles = null;
   }
@@ -121,6 +124,15 @@ class Reserva {
     return this.#estado === ESTADO_RESERVA.PENDIENTE;
   }
 
+  /** Codigo unico que representa al QR (null si aun no se genera). */
+  get codigoQr() {
+    return this.#codigoQr;
+  }
+
+  set codigoQr(valor) {
+    this.#codigoQr = valor;
+  }
+
   /** Total a pagar: subtotal menos el descuento aplicado (RN-04). */
   get total() {
     return this.#subtotal - this.#descuento;
@@ -167,7 +179,8 @@ class Reserva {
       fila.hora,
       fila.descuento,
       fila.subtotal,
-      fila.estado
+      fila.estado,
+      fila.codigo_qr ?? null
     );
 
     if (fila.nombre_cliente !== undefined) {
@@ -216,7 +229,8 @@ class Reserva {
       descuento: this.#descuento,
       subtotal: this.#subtotal,
       total: this.total,
-      estado: this.#estado
+      estado: this.#estado,
+      codigoQr: this.#codigoQr
     };
 
     if (this.#detalles !== null) {

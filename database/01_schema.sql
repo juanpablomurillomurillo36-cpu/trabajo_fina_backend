@@ -1,4 +1,4 @@
--- MySQL dump 10.13  Distrib 8.0.46, for Win64 (x86_64)
+﻿-- MySQL dump 10.13  Distrib 8.0.46, for Win64 (x86_64)
 --
 -- Host: localhost    Database: discoteca_api
 -- ------------------------------------------------------
@@ -40,7 +40,7 @@ CREATE TABLE `accesos` (
   PRIMARY KEY (`id_acceso`),
   KEY `fk_acceso_usuario` (`id_usuario`),
   CONSTRAINT `fk_acceso_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -100,18 +100,18 @@ DROP TABLE IF EXISTS `bitacora`;
 CREATE TABLE `bitacora` (
   `id_bitacora` int NOT NULL AUTO_INCREMENT,
   `id_usuario` int NOT NULL,
-  `tabla` varchar(64) COLLATE utf8mb4_spanish_ci NOT NULL COMMENT 'Tabla afectada',
+  `tabla` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci NOT NULL COMMENT 'Tabla afectada',
   `id_registro` int DEFAULT NULL COMMENT 'Id del registro afectado; sin FK porque apunta a distintas tablas',
-  `accion` enum('CREACION','EDICION','ANULACION') COLLATE utf8mb4_spanish_ci NOT NULL,
-  `detalle` text COLLATE utf8mb4_spanish_ci COMMENT 'Resumen legible del cambio',
-  `direccion_ip` varchar(45) COLLATE utf8mb4_spanish_ci DEFAULT NULL COMMENT 'IPv4 o IPv6 de quien ejecuto la accion',
+  `accion` enum('CREACION','EDICION','ANULACION') CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci NOT NULL,
+  `detalle` text CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci COMMENT 'Resumen legible del cambio',
+  `direccion_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci DEFAULT NULL COMMENT 'IPv4 o IPv6 de quien ejecuto la accion',
   `fecha_hora` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id_bitacora`),
   KEY `idx_bitacora_usuario` (`id_usuario`),
   KEY `idx_bitacora_fecha` (`fecha_hora`),
   KEY `idx_bitacora_registro` (`tabla`,`id_registro`),
   CONSTRAINT `fk_bitacora_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -182,7 +182,7 @@ DROP TABLE IF EXISTS `codigos_recuperacion`;
 CREATE TABLE `codigos_recuperacion` (
   `id_codigo` int NOT NULL AUTO_INCREMENT,
   `id_usuario` int NOT NULL,
-  `codigo_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci NOT NULL COMMENT 'bcrypt del codigo de 6 digitos; jamas el codigo en claro',
+  `codigo_hash` varchar(255) COLLATE utf8mb4_spanish_ci NOT NULL COMMENT 'bcrypt del codigo de 6 digitos; jamas el codigo en claro',
   `fecha_expiracion` datetime NOT NULL COMMENT 'Vida util del codigo (15 minutos)',
   `intentos` int NOT NULL DEFAULT '0' COMMENT 'Intentos de verificacion; el tope (5) se aplica en la API',
   `usado` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1 = ya se intercambio por una contrasena nueva',
@@ -190,7 +190,7 @@ CREATE TABLE `codigos_recuperacion` (
   PRIMARY KEY (`id_codigo`),
   KEY `fk_codigo_usuario` (`id_usuario`),
   CONSTRAINT `fk_codigo_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -209,7 +209,7 @@ CREATE TABLE `compras` (
   PRIMARY KEY (`id_compra`),
   KEY `fk_compra_proveedor` (`id_proveedor`),
   CONSTRAINT `fk_compra_proveedor` FOREIGN KEY (`id_proveedor`) REFERENCES `proveedores` (`id_proveedor`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -422,7 +422,7 @@ CREATE TABLE `permisos` (
   `estado` enum('activo','inactivo') CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci NOT NULL DEFAULT 'activo',
   PRIMARY KEY (`id_permiso`),
   UNIQUE KEY `uq_permisos_nombre` (`nombre_permiso`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -481,7 +481,7 @@ CREATE TABLE `proveedores` (
   `estado` enum('activo','inactivo') CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci NOT NULL DEFAULT 'activo',
   PRIMARY KEY (`id_proveedor`),
   UNIQUE KEY `uq_proveedores_nit` (`nit`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -501,8 +501,10 @@ CREATE TABLE `reservas` (
   `descuento` decimal(10,2) NOT NULL DEFAULT '0.00',
   `subtotal` decimal(12,2) NOT NULL DEFAULT '0.00',
   `estado` enum('pendiente','confirmada','cancelada') CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci NOT NULL DEFAULT 'pendiente',
+  `codigo_qr` varchar(100) COLLATE utf8mb4_spanish_ci DEFAULT NULL COMMENT 'Codigo unico del QR de la reserva; se genera al confirmar',
   PRIMARY KEY (`id_reserva`),
   UNIQUE KEY `uq_reserva_espacio_horario` (`tipo_espacio`,`identificador_espacio`,`fecha`,`hora`),
+  UNIQUE KEY `uq_reservas_codigo_qr` (`codigo_qr`),
   KEY `fk_reserva_cliente` (`id_cliente`),
   CONSTRAINT `fk_reserva_cliente` FOREIGN KEY (`id_cliente`) REFERENCES `clientes` (`id_cliente`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
@@ -540,7 +542,7 @@ CREATE TABLE `roles` (
   `fecha_creacion` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id_rol`),
   UNIQUE KEY `uq_roles_nombre` (`nombre_rol`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -581,7 +583,7 @@ CREATE TABLE `usuarios` (
   UNIQUE KEY `uq_usuarios_email` (`email`),
   KEY `fk_usuario_rol` (`id_rol`),
   CONSTRAINT `fk_usuario_rol` FOREIGN KEY (`id_rol`) REFERENCES `roles` (`id_rol`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_spanish_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

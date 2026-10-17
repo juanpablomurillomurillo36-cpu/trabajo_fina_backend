@@ -21,6 +21,11 @@
  *    indice unico; revisada DESPUES del colector: 400 -> 409).
  *  - cambiar estado: confirmar solo desde pendiente (409); cancelar
  *    desde pendiente o confirmada (409 si ya estaba cancelada).
+ *
+ * Reglas de la fase 35:
+ *  - al CONFIRMAR se genera el codigo unico del QR (crypto + indice
+ *    UNIQUE); las canceladas jamas generan QR.
+ *  - solo las confirmadas tienen QR -> 409 si se pide antes.
  *  Sin try/catch (R-ASYNC).
  */
 
@@ -32,6 +37,8 @@ const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
 const formato = require('../utils/formato');
 const fechas = require('../utils/fechas');
+const crypto = require('node:crypto');
+const QRCode = require('qrcode');
 const { ColectorErrores } = require('../utils/validadores');
 const { ESTADO_RESERVA, TIPO_ESPACIO, DESCUENTO, LIMITES } = require('../utils/constants');
 
@@ -39,6 +46,17 @@ const ESTADOS_PERMITIDOS = Object.values(ESTADO_RESERVA);
 const TIPOS_PERMITIDOS = Object.values(TIPO_ESPACIO);
 // La columna identificador_espacio es VARCHAR(30).
 const MAXIMO_IDENTIFICADOR = 30;
+
+/**
+ * Codigo unico del QR de una reserva. El azar criptografico hace que
+ * dos reservas jamas compartan codigo; el indice UNIQUE de la BD es la
+ * red de seguridad por si acaso.
+ *
+ * @returns {string} 'RSV-' + 24 hex (28 caracteres < 100 del VARCHAR).
+ */
+function generarCodigoQr() {
+  return `RSV-${crypto.randomBytes(12).toString('hex')}`;
+}
 
 /**
  * Valida la cabecera y TODAS las lineas de la reserva.
@@ -296,7 +314,47 @@ class ReservaService {
     }
 
     await reservaRepository.cambiarEstado(id, destino);
+
+    // Al CONFIRMAR nace el codigo del QR (fase 35): la reserva ya es
+    // valida para entrar. guardarCodigoQr solo escribe si estaba NULL.
+    if (destino === ESTADO_RESERVA.CONFIRMADA) {
+      await reservaRepository.guardarCodigoQr(id, generarCodigoQr());
+    }
+
     return this.obtenerConDetalles(id);
+  }
+
+  /**
+   * QR de la reserva (fase 35): devuelve el codigo unico y su imagen
+   * PNG en data-URL. Solo reservas CONFIRMADAS tienen QR (409); si por
+   * algun motivo falto el codigo, aqui se genera (guardarCodigoQr no
+   * pisa codigos existentes).
+   *
+   * @param {number} id
+   * @returns {Promise<{codigo:string, imagen:string, generado:boolean}>}
+   */
+  async generarQr(id) {
+    const reserva = await this.obtenerPorId(id);
+
+    if (reserva.estado !== ESTADO_RESERVA.CONFIRMADA) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.RESERVA_SIN_QR);
+    }
+
+    let codigo = reserva.codigoQr;
+    let generado = false;
+
+    if (!codigo) {
+      codigo = generarCodigoQr();
+      generado = await reservaRepository.guardarCodigoQr(id, codigo);
+      if (!generado) {
+        // Otra peticion lo genero primero: recargamos el real.
+        const recargada = await this.obtenerPorId(id);
+        codigo = recargada.codigoQr;
+      }
+    }
+
+    const imagen = await QRCode.toDataURL(codigo);
+    return { codigo, imagen, generado };
   }
 
   /** Baja fisica (solo pendiente; lineas caen en cascada). */
