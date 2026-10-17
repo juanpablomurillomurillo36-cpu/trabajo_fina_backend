@@ -38,6 +38,8 @@ const Reserva = require('./Reserva');
 const DetalleReserva = require('./DetalleReserva');
 const Ingreso = require('./Ingreso');
 const Evento = require('./Evento');
+const FichaTecnica = require('./FichaTecnica');
+const FichaServicio = require('./FichaServicio');
 
 module.exports = {
   Rol,
@@ -58,5 +60,7 @@ module.exports = {
   Reserva,
   DetalleReserva,
   Ingreso,
-  Evento
+  Evento,
+  FichaTecnica,
+  FichaServicio
 };

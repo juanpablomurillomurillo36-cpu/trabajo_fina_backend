@@ -7,7 +7,11 @@
  *    -> 400.
  *  - horas opcionales; si vienen ambas, horaFin > horaInicio -> 400.
  *  - estado: programado | en_curso | finalizado | cancelado.
- *  Fase 39 agrega ficha tecnica 1:1; fase 40 agenda + notificaciones.
+ *
+ * Regla de la fase 39 (RN-07): no se elimina un evento que aun tiene
+ * ficha tecnica -> 409 FICHA_NO_ELIMINABLE (la ficha se borra primero
+ * con DELETE /api/eventos/:id/ficha).
+ *  Fase 40 agrega agenda + notificaciones.
  *  Sin try/catch (R-ASYNC).
  */
 
@@ -119,8 +123,18 @@ class EventoService {
     return this.obtenerPorId(id);
   }
 
+  /**
+   * Baja fisica. RN-07: primero hay que quitar la ficha tecnica si
+   * existe -> 409 FICHA_NO_ELIMINABLE (el ON DELETE CASCADE de la BD
+   * seria el respaldo, pero la regla exige la eliminacion explicita).
+   */
   async eliminar(id) {
     const evento = await this.obtenerPorId(id);
+
+    if (await eventoRepository.tieneFichaTecnica(id)) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.FICHA_NO_ELIMINABLE);
+    }
+
     await eventoRepository.eliminar(id);
     return evento;
   }

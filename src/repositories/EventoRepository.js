@@ -41,6 +41,18 @@ class EventoRepository {
     return Evento.desdeFila(fila);
   }
 
+  /**
+   * ¿El evento ya tiene ficha tecnica? (RN-07: no se puede borrar el
+   * evento sin borrar antes su ficha).
+   */
+  async tieneFichaTecnica(id) {
+    const fila = await db.obtenerUno(
+      'SELECT 1 AS existe FROM ficha_tecnica WHERE id_evento = ?',
+      [id]
+    );
+    return Boolean(fila);
+  }
+
   async crear(fila) {
     const resultado = await db.ejecutar(
       `INSERT INTO evento (nombre, tematica, fecha, hora_inicio, hora_fin, estado)
