@@ -125,6 +125,7 @@ const MENSAJES = Object.freeze({
     // RN-02 reservas
     CONFLICTO_HORARIO: 'Ya existe una reserva para ese espacio en ese horario',
     RESERVA_SIN_DETALLES: 'La reserva debe incluir al menos un servicio',
+    RESERVA_NO_EDITABLE: 'Solo se pueden editar o eliminar reservas pendientes',
     RESERVA_NO_CANCELABLE: 'Solo se pueden cancelar reservas pendientes o confirmadas',
     RESERVA_YA_INGRESADA: 'El codigo QR de esta reserva ya fue utilizado',
     TURNO_SUPERPUESTO: 'El empleado ya tiene un turno que se superpone en esa fecha',

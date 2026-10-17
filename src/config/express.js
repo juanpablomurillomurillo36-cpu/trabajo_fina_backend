@@ -62,6 +62,8 @@ const rutaInventario = require('../routes/inventario.routes');
 
 const rutaAgendaEmpleado = require('../routes/agendaEmpleado.routes');
 
+const rutaReserva = require('../routes/reserva.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -171,6 +173,9 @@ function crearAplicacion() {
 
   // Turnos del personal: agenda_empleados (fase 32).
   app.use('/api/agenda', rutaAgendaEmpleado);
+
+  // Reservas de espacios (composicion reserva+detalle, fase 33).
+  app.use('/api/reservas', rutaReserva);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);
