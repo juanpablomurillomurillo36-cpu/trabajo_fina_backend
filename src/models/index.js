@@ -24,11 +24,13 @@ const Permiso = require('./Permiso');
 const Usuario = require('./Usuario');
 const Acceso = require('./Acceso');
 const Bitacora = require('./Bitacora');
+const Proveedor = require('./Proveedor');
 
 module.exports = {
   Rol,
   Permiso,
   Usuario,
   Acceso,
-  Bitacora
+  Bitacora,
+  Proveedor
 };

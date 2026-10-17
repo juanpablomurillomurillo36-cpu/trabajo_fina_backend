@@ -85,6 +85,8 @@ const MENSAJES = Object.freeze({
     CORREO_DUPLICADO: (correo) => `Ya existe un usuario con el correo "${correo}"`,
     RFC_DUPLICADO: (rfc) => `Ya existe un registro con el RFC "${rfc}"`,
     NSS_DUPLICADO: (nss) => `Ya existe un empleado con el NSS "${nss}"`,
+    NIT_DUPLICADO: (nit) => `Ya existe un proveedor con el NIT "${nit}"`,
+    DOCUMENTO_DUPLICADO: (documento) => `Ya existe un registro con el documento "${documento}"`,
     EN_USO: (recurso, tabla) => `No se puede eliminar: el ${recurso} esta en uso en ${tabla}`,
 
     // Seguridad
