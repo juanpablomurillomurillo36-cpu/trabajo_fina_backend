@@ -138,7 +138,7 @@ const MENSAJES = Object.freeze({
     DESCUENTO_NO_APLICABLE: 'El descuento aplica a partir de 3 servicios',
 
     // RN-06 aforo (SAF)
-    AFORO_SUPERADO: (maximo) => `El aforo maximo fue alcanzado (${maximo} personas). No se aceptan reservas nuevas`,
+    AFORO_SUPERADO: (maximo) => `El aforo maximo fue alcanzado (${maximo} personas). No se admiten mas ingresos`,
     AFORO_ALERTA: (actual, maximo, porcentaje) =>
       `ALERTA DE AFORO: ${actual} de ${maximo} personas (${porcentaje}%). Acercandose al limite`,
 

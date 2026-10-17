@@ -6,6 +6,7 @@
 
 const db = require('../config/database');
 const Ingreso = require('../models/Ingreso');
+const fechas = require('../utils/fechas');
 const { Filtros } = require('../utils/consulta');
 
 const SELECT_CON_JOINS = `
@@ -53,6 +54,22 @@ class IngresoRepository {
   async obtenerPorId(id) {
     const fila = await db.obtenerUno(`${SELECT_CON_JOINS} WHERE i.id_ingreso = ?`, [id]);
     return Ingreso.desdeFila(fila);
+  }
+
+  /**
+   * Personas dentro del local: ingresos VALIDOS de HOY. La tabla no
+   * tiene salidas, asi que el conteo de ingresos activos del dia es la
+   * ocupacion (supuesto documentado en ssr.md).
+   *
+   * @returns {Promise<number>}
+   */
+  async contarOcupados() {
+    const hoy = fechas.ahoraEnMySQL().slice(0, 10);
+    const fila = await db.obtenerUno(
+      "SELECT COUNT(*) AS total FROM ingresos WHERE estado = 'valido' AND fecha = ?",
+      [hoy]
+    );
+    return Number(fila.total);
   }
 
   /**

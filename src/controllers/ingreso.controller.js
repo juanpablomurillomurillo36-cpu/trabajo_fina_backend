@@ -26,6 +26,16 @@ class IngresoController {
     });
   });
 
+  /** GET /api/ingresos/aforo  (estado del SAF, fase 37) */
+  obtenerAforo = capturarAsync(async (req, res) => {
+    const aforo = await ingresoService.aforo();
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.DETALLE('Aforo'),
+      datos: aforo
+    });
+  });
+
   /** GET /api/ingresos/:id */
   obtenerPorId = capturarAsync(async (req, res) => {
     const ingreso = await ingresoService.obtenerPorId(req.idsValidados.id);
