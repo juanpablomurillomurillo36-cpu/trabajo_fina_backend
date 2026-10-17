@@ -26,6 +26,7 @@ const Acceso = require('./Acceso');
 const Bitacora = require('./Bitacora');
 const Proveedor = require('./Proveedor');
 const Producto = require('./Producto');
+const Servicio = require('./Servicio');
 
 module.exports = {
   Rol,
@@ -34,5 +35,6 @@ module.exports = {
   Acceso,
   Bitacora,
   Proveedor,
-  Producto
+  Producto,
+  Servicio
 };
