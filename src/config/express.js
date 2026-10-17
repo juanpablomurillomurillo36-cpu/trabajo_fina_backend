@@ -45,6 +45,8 @@ const rutaUsuario = require('../routes/usuario.routes');
 
 const rutaProveedor = require('../routes/proveedor.routes');
 
+const rutaProducto = require('../routes/producto.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -129,6 +131,9 @@ function crearAplicacion() {
 
   // Catalogo de proveedores.
   app.use('/api/proveedores', rutaProveedor);
+
+  // Catalogo de productos.
+  app.use('/api/productos', rutaProducto);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);
