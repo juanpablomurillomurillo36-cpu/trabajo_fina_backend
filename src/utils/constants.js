@@ -171,6 +171,25 @@ const LIMITES = Object.freeze({
 });
 
 // ---------------------------------------------------------------------
+// SEGURIDAD / AUTENTICACION
+// ---------------------------------------------------------------------
+
+/**
+ * Rol que recibe quien se registra POR SU CUENTA (endpoint publico).
+ *
+ * POR QUE NO SE LE DEJE ELEGIR?
+ * Porque si el cliente pudiera mandar `idRol: 1` en el registro,
+ * se autoasignaria el rol admin y la autorizacion no serviria de nada.
+ * El id del rol se busca en la base por este NOMBRE, nunca se acepta
+ * del cliente.
+ *
+ * El seed de la fase 49 crea el rol con exactamente este nombre.
+ */
+const SEGURIDAD = Object.freeze({
+  ROL_CLIENTE_DEFECTO: 'cliente'
+});
+
+// ---------------------------------------------------------------------
 // REGLAS DE NEGOCIO PARAMETRIZADAS
 // ---------------------------------------------------------------------
 
@@ -210,6 +229,7 @@ module.exports = {
   ESTADO_INGRESO,
   TIPO_ACCION_ACCESO,
   RESULTADO_ACCESO,
+  SEGURIDAD,
   TIPO_NOTIFICACION,
   CANAL_NOTIFICACION,
   ESTADO_NOTIFICACION,

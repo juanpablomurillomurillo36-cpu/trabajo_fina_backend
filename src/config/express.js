@@ -37,7 +37,9 @@ const { registrarAviso } = require('../middleware/logger');
 const rutaSalud = require('../routes/salud.routes');
 const rutaPermiso = require('../routes/permiso.routes');
 const rutaRol = require('../routes/rol.routes');
-const rutaUsuario = require('../routes/usuario.routes');
+  const rutaUsuario = require('../routes/usuario.routes');
+
+  const rutaAuth = require('../routes/auth.routes');
 
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
@@ -113,6 +115,10 @@ function crearAplicacion() {
 
   // Cuentas de usuario del sistema (el CRUD de credenciales).
   app.use('/api/usuarios', rutaUsuario);
+
+  // Sesion: login, logout, registro publico y perfil propio. Todo lo
+  // que necesite token se protege DENTRO de sus propias rutas.
+  app.use('/api/auth', rutaAuth);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

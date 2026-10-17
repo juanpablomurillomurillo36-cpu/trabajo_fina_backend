@@ -87,6 +87,28 @@ class RolRepository {
   }
 
   /**
+   * Rol por su nombre (unico en la base).
+   *
+   * Lo necesita el registro PUBLICO de auth: alli no se pide idRol
+   * (el cliente no debe elegir su propio rol), sino que se asigna el
+   * rol por defecto `cliente` buscandolo por nombre.
+   *
+   * @param {string} nombre
+   * @returns {Promise<Rol|null>}
+   */
+  async obtenerPorNombre(nombre) {
+    const fila = await db.obtenerUno(
+      `SELECT id_rol, nombre_rol, descripcion, estado, fecha_creacion
+         FROM roles
+        WHERE nombre_rol = ?
+        LIMIT 1`,
+      [nombre]
+    );
+
+    return Rol.desdeFila(fila);
+  }
+
+  /**
    * Comprueba si YA EXISTE un rol con ese nombre (409 en el service).
    *
    * El nombre es UNIQUE en la base, asi que esta consulta es el aviso
