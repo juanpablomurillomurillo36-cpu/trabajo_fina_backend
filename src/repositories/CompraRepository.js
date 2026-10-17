@@ -128,6 +128,41 @@ class CompraRepository {
   }
 
   /**
+   * CONFIRMAR compra (RN-01) en UNA transaccion:
+   *   1. suma el stock de cada producto de sus lineas;
+   *   2. pasa la compra a 'confirmada'.
+   * Si CUALQUIER paso falla, no se suma stock ni se cambia estado
+   * (rollback automatico de db.conTransaccion).
+   *
+   * @param {number} id
+   * @param {Array<{idProducto:number, cantidad:number}>} lineas
+   */
+  async confirmarEnTransaccion(id, lineas) {
+    await db.conTransaccion(async (conexion) => {
+      for (const linea of lineas) {
+        const [resultado] = await conexion.execute(
+          'UPDATE productos SET stock_actual = stock_actual + ? WHERE id_producto = ?',
+          [linea.cantidad, linea.idProducto]
+        );
+
+        if (resultado.affectedRows === 0) {
+          // Dispara el rollback: no existe (o desaparecio) el producto.
+          throw new Error(`No se pudo sumar stock del producto ${linea.idProducto}`);
+        }
+      }
+
+      const [resultadoCompra] = await conexion.execute(
+        'UPDATE compras SET estado = ? WHERE id_compra = ?',
+        ['confirmada', id]
+      );
+
+      if (resultadoCompra.affectedRows === 0) {
+        throw new Error('La compra dejo de existir durante la confirmacion');
+      }
+    });
+  }
+
+  /**
    * Baja fisica (los detalles caen en cascada por la FK
    * `fk_detcompra_compra ... ON DELETE CASCADE`).
    */

@@ -91,6 +91,42 @@ class CompraController {
       datos: compra
     });
   });
+
+  /** POST /api/compras/:id/confirmar (RN-01: suma stock en transaccion) */
+  confirmar = capturarAsync(async (req, res) => {
+    const id = req.idsValidados.id;
+    const compra = await compraService.confirmar(id);
+
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: TABLA,
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: id,
+      detalle: `Compra #${id} confirmada: stock actualizado en ${compra.detalles.length} producto(s)`
+    });
+
+    return respuesta.exito(res, {
+      mensaje: 'Compra confirmada y stock actualizado',
+      datos: compra
+    });
+  });
+
+  /** POST /api/compras/:id/cancelar (queda anulada sin tocar stock) */
+  cancelar = capturarAsync(async (req, res) => {
+    const id = req.idsValidados.id;
+    const compra = await compraService.cancelar(id);
+
+    await bitacoraService.registrarDesdeReq(req, {
+      tabla: TABLA,
+      accion: ACCION_BITACORA.EDICION,
+      idRegistro: id,
+      detalle: `Compra #${id} cancelada`
+    });
+
+    return respuesta.exito(res, {
+      mensaje: 'Compra cancelada correctamente',
+      datos: compra
+    });
+  });
 }
 
 // Singleton.

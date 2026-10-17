@@ -190,6 +190,37 @@ class CompraService {
     await compraRepository.eliminar(id);
     return compra;
   }
+
+  /**
+   * CONFIRMAR (RN-01): suma stock de TODAS las lineas + cambia estado,
+   * en UNA transaccion. Solo compras pendientes (409).
+   */
+  async confirmar(id) {
+    const compra = await this.obtenerConDetalles(id);
+
+    if (compra.estado !== ESTADO_COMPRA.PENDIENTE) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.COMPRA_NO_CONFIRMABLE);
+    }
+
+    await compraRepository.confirmarEnTransaccion(id, compra.detalles);
+    return this.obtenerConDetalles(id);
+  }
+
+  /**
+   * CANCELAR compra (queda 'anulada'). Como solo se cancelan PENDIENTES
+   * (nunca sumaron stock) no hay que devolver existencias. 409 si no
+   * esta pendiente.
+   */
+  async cancelar(id) {
+    const compra = await this.obtenerPorId(id);
+
+    if (compra.estado !== ESTADO_COMPRA.PENDIENTE) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.COMPRA_NO_ANULABLE);
+    }
+
+    await compraRepository.cambiarEstado(id, ESTADO_COMPRA.ANULADA);
+    return this.obtenerPorId(id);
+  }
 }
 
 // Singleton.
