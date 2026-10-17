@@ -100,7 +100,7 @@ async function preparar(cuerpo, estadoInicial = ESTADO_VENTA.PENDIENTE) {
 
     // El precio NO viene del body: se toma del catalogo (fuente unica).
     if (producto !== null && producto.estaActivo() && cantidad !== null && cantidad >= 1 && cantidad <= 999) {
-      detalles.push(new DetalleVenta(null, null, idProducto, cantidad, producto.precio));
+      detalles.push(new DetalleVenta(null, null, idProducto, cantidad, producto.precioVenta));
     }
   });
 
