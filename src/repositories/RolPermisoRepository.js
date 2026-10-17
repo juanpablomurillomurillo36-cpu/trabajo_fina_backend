@@ -20,80 +20,139 @@
  *
  * La PK compuesta (id_rol, id_permiso) impide asignar dos veces el
  * mismo permiso al mismo rol: MySQL rechaza la fila duplicada.
+ *
+ * DIVISION DE RESPONSABILIDADES CON EL SERVICE
+ * ---------------------------------------------------------------------
+ *   Repository -> SOLO ejecuta SQL (INSERT/DELETE/SELECT).
+ *   Service    -> decide si la operacion esta permitida (404 si el
+ *                 permiso no existe, 409 si el rol se quedaria sin
+ *                 permisos). Aqui NUNCA se lanza un AppError.
  */
 
-/**
- * Comprueba si YA EXISTE un permiso con ese id.
- *
- * Se usa en el service para validar que el cliente no intente asignar
- * un permiso que no existe en la base de datos (evitaría que MySQL
- * lancara ER_ROW_IS_REFERENCED).
- *
- * @param {number} idPermiso
- * @returns {Promise<boolean>}
- */
-async existePermiso(idPermiso) {
-  const fila = await db.obtenerOne(
-    `SELECT 1 AS existe FROM permisos WHERE id_permiso = ?`,
-    [idPermiso]
-  );
-  return fila !== null;
-}
+const db = require('../config/database');
+const { Permiso } = require('../models');
 
-/**
- * Asigna un permiso a un rol (insere en la tabla puente).
- *
- * Si el permiso ya estaba asignado a ese rol, la insercion es IGNORADA
- * gracias a ON DUPLICATE KEY UPDATE (la PK compuesta lo impide).
- * El metodo devuelve `true` si la operacion fue exitosa (sea nuevo o ya existia).
- *
- * @param {number} idRol
- * @param {number} idPermiso
- * @returns {Promise<boolean>}
- */
-async asignarPermisoARol(idRol, idPermiso) {
-  const resultado = await db.ejecutar(
-    `INSERT INTO rol_permiso (id_rol, id_permiso) VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE id_rol = id_rol`,
-    [idRol, idPermiso]
-  );
-  return resultado.affectedRows > 0;
-}
+class RolPermisoRepository {
+  /**
+   * Permisos asignados a un rol, ya como objetos Permiso.
+   *
+   * Se pide `ORDER BY nombre_permiso` para que el detalle salga
+   * siempre en el mismo orden: sin ORDER BY, MySQL no garantiza el
+   * orden de las filas y dos respuestas iguales podrian venir
+   * desordenadas (lo que confunde a quien compara respuestas en
+   * las pruebas de Postman).
+   *
+   * @param {number} idRol
+   * @returns {Promise<Permiso[]>}
+   */
+  async listarPermisosDeRol(idRol) {
+    const filas = await db.ejecutar(
+      `SELECT p.id_permiso, p.nombre_permiso, p.descripcion, p.estado
+         FROM rol_permiso rp
+         JOIN permisos p ON p.id_permiso = rp.id_permiso
+        WHERE rp.id_rol = ?
+        ORDER BY p.nombre_permiso ASC`,
+      [idRol]
+    );
 
-/**
- * Quita un permiso de un rol (elimina de la tabla puente).
- *
- * Si este era el ultimo permiso del rol, la operacion falla y devuelve
- * `false` para que el service responda con 409 ROL_SIN_PERMISOS.
- *
- * @param {number} idRol
- * @param {number} idPermiso
- * @returns {Promise<boolean>} `true` si se borro, `false` si era el ultimo.
- */
-async quitarPermisoDeRol(idRol, idPermiso) {
-  // Primero verifico cuantas asignaciones tiene este rol DESPUES de borrar.
-  // Para no contar en memoria, hago un DELETE y luego cuento lo que queda.
-  const antes = await this.listarPermisosDeRol(idRol);
-  const cantidadAntes = antes.length;
-
-  const resultado = await db.ejecutar(
-    `DELETE FROM rol_permiso WHERE id_rol = ? AND id_permiso = ?`,
-    [idRol, idPermiso]
-  );
-
-  const afectado = resultado.affectedRows > 0;
-  const despues = await this.listarPermisosDeRol(idRol);
-  const cantidadDespues = despues.length;
-
-  // Si despues de borrar el rol quedo sin permisos, lo deshago
-  // (no se aplica el borrado) y devuelvo false para que el service
-  // lance el 409 ROL_SIN_PERMISOS.
-  if (afectado && cantidadDespues < cantidadAntes) {
-    // Borrado confirmado: devuelvo true si aun quedan permisos,
-    // o false si el rol ahora queda con 0 (el service decidira).
-    return cantidadDespues > 0;
+    return filas.map((fila) => Permiso.desdeFila(fila));
   }
 
-  // Si no se pudo borrar (no existia la asignacion) o quedo sin permisos
-  return false;
+  /**
+   * Comprueba si el permiso existe en el catalogo `permisos`.
+   *
+   * Se consulta antes de INSERTar en la puente: si el id no existe,
+   * MySQL rechazaria la fila con un error crudo de FK
+   * (ER_NO_REFERENCED_ROW) que aqui convertiriamos en un 400 generico.
+   * Con esta consulta el service puede dar un 404 especifico.
+   *
+   * @param {number} idPermiso
+   * @returns {Promise<boolean>}
+   */
+  async existePermiso(idPermiso) {
+    const fila = await db.obtenerUno(
+      `SELECT 1 AS existe FROM permisos WHERE id_permiso = ?`,
+      [idPermiso]
+    );
+
+    return fila !== null;
+  }
+
+  /**
+   * Comprueba si el rol YA TIENE asignado ese permiso.
+   *
+   * @param {number} idRol
+   * @param {number} idPermiso
+   * @returns {Promise<boolean>}
+   */
+  async existePar(idRol, idPermiso) {
+    const fila = await db.obtenerUno(
+      `SELECT 1 AS existe FROM rol_permiso WHERE id_rol = ? AND id_permiso = ?`,
+      [idRol, idPermiso]
+    );
+
+    return fila !== null;
+  }
+
+  /**
+   * Asigna un permiso a un rol.
+   *
+   * ON DUPLICATE KEY UPDATE convierte la insercion en una operacion
+   * IDEMPOTENTE: si el par ya existia, no falla y no duplica nada.
+   * (A proposito no se usa INSERT IGNORE: ocultaria otros errores de
+   * insercion, como una FK rota.)
+   *
+   * @param {number} idRol
+   * @param {number} idPermiso
+   * @returns {Promise<boolean>} true si al menos una fila fue afectada.
+   */
+  async asignar(idRol, idPermiso) {
+    const resultado = await db.ejecutar(
+      `INSERT INTO rol_permiso (id_rol, id_permiso) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE id_rol = id_rol`,
+      [idRol, idPermiso]
+    );
+
+    // affectedRows: 1 = fila nueva, 2 = fila existente "actualizada"
+    // con el mismo valor. En ambos casos el permiso quedo asignado.
+    return resultado.affectedRows > 0;
+  }
+
+  /**
+   * Quita un permiso del rol (solo SQL; la decision de si se PUEDE
+   * quitar es del service).
+   *
+   * @param {number} idRol
+   * @param {number} idPermiso
+   * @returns {Promise<boolean>} true si existia y se elimino.
+   */
+  async eliminarPar(idRol, idPermiso) {
+    const resultado = await db.ejecutar(
+      `DELETE FROM rol_permiso WHERE id_rol = ? AND id_permiso = ?`,
+      [idRol, idPermiso]
+    );
+
+    return resultado.affectedRows > 0;
+  }
+
+  /**
+   * Cuantos permisos tiene el rol actualmente.
+   *
+   * Se usa justo despues de asignar/quitar para devolver el estado
+   * real sin depender de lo que creemos que paso.
+   *
+   * @param {number} idRol
+   * @returns {Promise<number>}
+   */
+  async contarPermisos(idRol) {
+    const fila = await db.obtenerUno(
+      `SELECT COUNT(*) AS total FROM rol_permiso WHERE id_rol = ?`,
+      [idRol]
+    );
+
+    return Number(fila?.total ?? 0);
+  }
 }
+
+// SINGLETON
+module.exports = new RolPermisoRepository();

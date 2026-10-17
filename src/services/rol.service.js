@@ -3,22 +3,21 @@
  * ---------------------------------------------------------------------
  * CAPA DE SERVICIO de la entidad Rol.
  *
- * REGLAS DE NEGOCIO QUE RESUELVE ESTA CLASE
- *   1. nombre_rol UNICO          -> 409 si ya lo usa otro rol.
- *   2. id inexistente            -> 404.
- *   3. no se borra un rol con    -> 409 ROL_EN_USO.
- *      usuarios asignados           (los usuarios quedarian huérfanos)
- *   4. el detalle TRAE sus       -> via RolPermisoRepository.
- *      permisos cargados
- *
- * POR QUE NO SE PUDE BORRAR UN ROL EN USO?
- * Porque la columna usuarios.id_rol es FOREIGN KEY; si se fuera la
- * referencia, MySQL devolveria un error crudo. Avisar con 409 y un
- * mensaje claro es infinitamente mejor.
- *
- * Nota de diseno (fase 15): este service SOLO LEE los permisos del rol.
- * Asignarlos y quitarlos llega en la fase 16, con endpoints propios.
- */
+   * REGLAS DE NEGOCIO QUE RESUELVE ESTA CLASE
+   *   1. nombre_rol UNICO          -> 409 si ya lo usa otro rol.
+   *   2. id inexistente            -> 404.
+   *   3. no se borra un rol con    -> 409 ROL_EN_USO.
+   *      usuarios asignados           (los usuarios quedarian huérfanos)
+   *   4. el detalle TRAE sus       -> via RolPermisoRepository.
+   *      permisos cargados
+   *   5. asignar/quitar permisos   -> 404 si no existen; y el rol
+   *      (N:M)                        nunca se queda sin permisos (409).
+   *
+   * POR QUE NO SE PUDE BORRAR UN ROL EN USO?
+   * Porque la columna usuarios.id_rol es FOREIGN KEY; si se fuera la
+   * referencia, MySQL devolveria un error crudo. Avisar con 409 y un
+   * mensaje claro es infinitamente mejor.
+   */
 
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
@@ -26,8 +25,8 @@ const formato = require('../utils/formato');
 const { ColectorErrores } = require('../utils/validadores');
 const { LIMITES, ESTADO } = require('../utils/constants');
 const { Rol } = require('../models');
-const rolRepository = require('../repositories/rolRepository');
-const rolPermisoRepository = require('../repositories/rolPermisoRepository');
+const rolRepository = require('../repositories/RolRepository');
+const rolPermisoRepository = require('../repositories/RolPermisoRepository');
 
 // Lista blanca: cualquier otra llave del cuerpo se descarta antes de
 // validar (evita que un cliente mande id o fechaCreacion y los "peguen").
@@ -192,37 +191,49 @@ class RolService {
   /**
    * ASIGNAR UN PERMISO A UN ROL.
    *
-   * Valida que el permiso existe, lo asigna en la tabla puente y
-   * asegura que el rol quede con al menos un permiso (409 si no).
+   * Valida que el rol y el permiso existan y luego asienta la fila en
+   * la tabla puente. La asignar es IDEMPOTENTE: si el rol ya tenia ese
+   * permiso, no falla ni duplica nada.
    *
-   * @param {number} idRol
-   * @param {number} idPermiso
+   * @param {number} idRol     Ya llego convertido desde la ruta.
+   * @param {number|string} idPermiso  Viene del BODY, por eso se valida aqui.
    * @returns {Promise<{success: boolean, totalPermisos: number}>}
-   * @throws {AppError} 404 si el permiso no existe, 409 si el rol
-   *   quedaria sin permisos.
+   * @throws {AppError} 400 si idPermiso no es numero, 404 si rol o
+   *   permiso no existen.
    */
   async asignarPermisoARol(idRol, idPermiso) {
-    // 1. Validar que el permiso existe en la base de datos
-    const existe = await rolPermisoRepository.existePermiso(idPermiso);
+    // 1. idPermiso llega del CUERPO (no de la ruta), asi que hay que
+    //    convertirlo y descartar basura como "abc" o -1.
+    const idPermisoNumerico = formato.aEnteroONulo(idPermiso);
+
+    if (idPermisoNumerico === null || idPermisoNumerico <= 0) {
+      throw AppError.validacion(MENSAJES.VALIDACION.ID_INVALIDO('idPermiso'), [
+        { campo: 'idPermiso', mensaje: MENSAJES.VALIDACION.ID_INVALIDO('idPermiso') }
+      ]);
+    }
+
+    // 2. El rol debe existir (si no, la FK fallaria con un error crudo)
+    const rol = await rolRepository.obtenerPorId(idRol);
+    if (rol === null) {
+      throw AppError.noEncontrado(MENSAJES.NEGOCIO.NO_EXISTE('rol'));
+    }
+
+    // 3. Validar que el permiso existe en la base de datos
+    const existe = await rolPermisoRepository.existePermiso(idPermisoNumerico);
     if (!existe) {
       throw AppError.noEncontrado(MENSAJES.NEGOCIO.PERMISO_NO_EXISTE);
     }
 
-    // 2. Asignar en la tabla puente (INSERT ... ON DUPLICATE KEY UPDATE)
-    const asignado = await rolPermisoRepository.asignarPermisoARol(idRol, idPermiso);
+    // 4. Asignar en la tabla puente (INSERT ... ON DUPLICATE KEY UPDATE)
+    const asignado = await rolPermisoRepository.asignar(idRol, idPermisoNumerico);
     if (!asignado) {
       throw AppError.interno('No se pudo asignar el permiso');
     }
 
-    // 3. Verificar que el rol no quede sin permisos (defensiva)
-    const permisos = await rolPermisoRepository.listarPermisosDeRol(idRol);
-    if (permisos.length === 0) {
-      throw AppError.conflicto(MENSAJES.NEGOCIO.ROL_SIN_PERMISOS, [
-        { campo: 'permisos', mensaje: 'El rol debe tener al menos un permiso.' }
-      ]);
-    }
+    // 5. Se devuelve el total REAL de permisos del rol, recien consultado.
+    const totalPermisos = await rolPermisoRepository.contarPermisos(idRol);
 
-    return { success: true, totalPermisos: permisos.length };
+    return { success: true, totalPermisos };
   }
 
   /**
@@ -238,20 +249,38 @@ class RolService {
    *   409 si el rol quede sin permisos.
    */
   async quitarPermisoDeRol(idRol, idPermiso) {
-    const quitado = await rolPermisoRepository.quitarPermisoDeRol(idRol, idPermiso);
-    if (!quitado) {
-      throw AppError.notFound(MENSAJES.NEGOCIO.PERMISO_NO_EXISTE);
+    // 1. El rol debe existir.
+    const rol = await rolRepository.obtenerPorId(idRol);
+    if (rol === null) {
+      throw AppError.noEncontrado(MENSAJES.NEGOCIO.NO_EXISTE('rol'));
     }
 
-    // Verificar que el rol todavia tiene permisos
-    const permisos = await rolPermisoRepository.listarPermisosDeRol(idRol);
-    if (permisos.length === 0) {
+    // 2. El permiso debe estar ASIGNADO a ESTE rol (404 si no).
+    const asignados = await rolPermisoRepository.listarPermisosDeRol(idRol);
+    const estaAsignado = asignados.some((permiso) => permiso.id === idPermiso);
+
+    if (!estaAsignado) {
+      throw AppError.noEncontrado('El permiso no esta asignado a este rol');
+    }
+
+    // 3. Regla "el rol mantiene al menos un permiso" (409).
+    //    Se comprueba ANTES de borrar: asi no hay que "deshacer"
+    //    una eliminacion ni dejar el rol vacio ni un instante.
+    if (asignados.length === 1) {
       throw AppError.conflicto(MENSAJES.NEGOCIO.ROL_SIN_PERMISOS, [
-        { campo: 'permisos', mensaje: 'El rol debe tener al menos un permiso.' }
+        { campo: 'permisos', mensaje: 'Asigna otro permiso antes de quitar este.' }
       ]);
     }
 
-    return permisos;
+    // 4. Quitar el permiso (aqui ya sabemos que es permitido).
+    const quitado = await rolPermisoRepository.eliminarPar(idRol, idPermiso);
+    if (!quitado) {
+      // Caso de carrera: alguien lo quito entre la verificacion y aqui.
+      throw AppError.noEncontrado('El permiso no esta asignado a este rol');
+    }
+
+    // Se devuelven los permisos RESTANTES, tal cual promete el doc.
+    return rolPermisoRepository.listarPermisosDeRol(idRol);
   }
 
   // ==================================================================

@@ -12,12 +12,14 @@
  * NI UN try/catch.
  *
  * TABLA DE ENDPOINTS (tambien esta en routes/rol.routes.js)
- *   GET    /api/roles               Lista con filtros y paginacion
- *   GET    /api/roles/:id           Detalle con sus permisos
- *   POST   /api/roles               Crear
- *   PUT    /api/roles/:id           Actualizar
- *   PATCH  /api/roles/:id/estado    Cambiar estado
- *   DELETE /api/roles/:id           Eliminar (si no esta en uso)
+ *   GET    /api/roles                     Lista con filtros y paginacion
+ *   GET    /api/roles/:id                 Detalle con sus permisos
+ *   POST   /api/roles                     Crear
+ *   PUT    /api/roles/:id                 Actualizar
+ *   PATCH  /api/roles/:id/estado          Cambiar estado
+ *   DELETE /api/roles/:id                 Eliminar (si no esta en uso)
+ *   POST   /api/roles/:id/permisos        Asignar un permiso (N:M)
+ *   DELETE /api/roles/:id/permisos/:idPermiso  Quitar un permiso (N:M)
  */
 
 const rolService = require('../services/rol.service');
@@ -93,6 +95,39 @@ class RolController {
     return respuesta.exito(res, {
       mensaje: MENSAJES.EXITO.ELIMINADO('Rol'),
       datos: resumen
+    });
+  });
+
+  /**
+   * POST /api/roles/:id/permisos
+   * Body: { "idPermiso": 3 }
+   *
+   * El permiso va en el CUERPO porque lo que se crea es una FILA de la
+   * tabla puente (la relacion rol<->permiso), no un recurso con URL
+   * propia: no tiene sentido inventar un id para esa fila.
+   */
+  asignarPermiso = capturarAsync(async (req, res) => {
+    const resultado = await rolService.asignarPermisoARol(
+      req.idsValidados.id,
+      req.body.idPermiso
+    );
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Asignacion de permiso'),
+      datos: resultado
+    });
+  });
+
+  /** DELETE /api/roles/:id/permisos/:idPermiso */
+  quitarPermiso = capturarAsync(async (req, res) => {
+    const permisos = await rolService.quitarPermisoDeRol(
+      req.idsValidados.id,
+      req.idsValidados.idPermiso
+    );
+
+    return respuesta.exito(res, {
+      mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Quita de permiso'),
+      datos: permisos
     });
   });
 }
