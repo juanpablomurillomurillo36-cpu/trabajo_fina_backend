@@ -389,6 +389,28 @@ class ColectorErrores {
     return this;
   }
 
+  /** Campo hora 'HH:MM' (o 'HH:MM:SS'), sin dia asociado. */
+  exigirHora(campo, valor, opciones = {}) {
+    const { requerido = true } = opciones;
+    const formato = require('./formato');
+
+    const estaAusente = valor === null || valor === undefined || valor === '';
+
+    if (estaAusente) {
+      if (requerido) {
+        this.agregar(campo, MENSAJES.VALIDACION.REQUERIDO(campo));
+      }
+      return this;
+    }
+
+    // formato.aHoraONulo centraliza la expresion regular (DRY).
+    if (formato.aHoraONulo(valor) === null) {
+      return this.agregar(campo, MENSAJES.VALIDACION.HORA_INVALIDA(campo));
+    }
+
+    return this;
+  }
+
   /** Identificador: entero positivo obligatorio. */
   exigirId(campo, valor) {
     if (!esEnteroPositivo(valor)) {

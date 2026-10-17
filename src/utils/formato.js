@@ -113,6 +113,31 @@ function aDecimalONulo(valor) {
 }
 
 /**
+ * Normaliza una hora 'HH:MM' o 'HH:MM:SS' a 'HH:MM:SS' (formato de
+ * las columnas TIME de MySQL). Devuelve null si no es hora valida.
+ *
+ *   "18:30"    -> "18:30:00"
+ *   "18:30:15" -> "18:30:15"
+ *   "25:00"    -> null
+ *   "mañana"   -> null
+ *
+ * Se comparte entre validadores.exigirHora y los services para no
+ * repetir la expresion regular (DRY).
+ *
+ * @param {*} valor
+ * @returns {string|null}
+ */
+function aHoraONulo(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+  if (typeof valor !== 'string') return null;
+
+  const coincide = valor.trim().match(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/);
+  if (!coincide) return null;
+
+  return coincide[0].length === 5 ? `${coincide[0]}:00` : coincide[0];
+}
+
+/**
  * Redondea un decimal a 2 posiciones (dinero).
  *
  *   1500.456  ->  1500.46
@@ -206,6 +231,7 @@ module.exports = {
   aMinusculas,
   aEnteroONulo,
   aDecimalONulo,
+  aHoraONulo,
   redondearDosDecimales,
   aTextoMoneda,
   estaVacio,

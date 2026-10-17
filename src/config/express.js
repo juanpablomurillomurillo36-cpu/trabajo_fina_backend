@@ -60,6 +60,8 @@ const rutaCompra = require('../routes/compra.routes');
 
 const rutaInventario = require('../routes/inventario.routes');
 
+const rutaAgendaEmpleado = require('../routes/agendaEmpleado.routes');
+
 /**
  * Decide si un origen (frontend) tiene permiso para llamar a la API.
  *
@@ -166,6 +168,9 @@ function crearAplicacion() {
 
   // Inventario: alertas de stock minimo (RN-03).
   app.use('/api/inventario', rutaInventario);
+
+  // Turnos del personal: agenda_empleados (fase 32).
+  app.use('/api/agenda', rutaAgendaEmpleado);
 
   // ---- 4. Ruta inexistente (404) ----
   app.use(rutaNoEncontrada);

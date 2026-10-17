@@ -72,7 +72,8 @@ const MENSAJES = Object.freeze({
     CORPUS_VACIO: 'Debes enviar el cuerpo de la peticion',
     CORPUS_JSON_INVALIDO: 'El cuerpo de la peticion no es JSON valido',
     PARAMETRO_INVALIDO: (parametro) => `El parametro "${parametro}" no es valido`,
-    FORMATO_FECHA_HORA: (campo) => `El campo "${campo}" debe tener formato de fecha y hora valido`
+    FORMATO_FECHA_HORA: (campo) => `El campo "${campo}" debe tener formato de fecha y hora valido`,
+    HORA_INVALIDA: (campo) => `El campo "${campo}" debe tener formato de hora valido (HH:MM)`
   }),
 
   // ==================================================================
@@ -126,6 +127,7 @@ const MENSAJES = Object.freeze({
     RESERVA_SIN_DETALLES: 'La reserva debe incluir al menos un servicio',
     RESERVA_NO_CANCELABLE: 'Solo se pueden cancelar reservas pendientes o confirmadas',
     RESERVA_YA_INGRESADA: 'El codigo QR de esta reserva ya fue utilizado',
+    TURNO_SUPERPUESTO: 'El empleado ya tiene un turno que se superpone en esa fecha',
 
     // RN-04 calculo de reserva
     DESCUENTO_NO_APLICABLE: 'El descuento aplica a partir de 3 servicios',

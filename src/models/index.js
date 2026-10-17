@@ -33,6 +33,7 @@ const Empleado = require('./Empleado');
 const Cliente = require('./Cliente');
 const Compra = require('./Compra');
 const DetalleCompra = require('./DetalleCompra');
+const AgendaEmpleado = require('./AgendaEmpleado');
 
 module.exports = {
   Rol,
@@ -48,5 +49,6 @@ module.exports = {
   Empleado,
   Cliente,
   Compra,
-  DetalleCompra
+  DetalleCompra,
+  AgendaEmpleado
 };
