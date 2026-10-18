@@ -17,8 +17,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/api/salud",
-              "host": ["{{base_url}}"],
-              "path": ["api", "salud"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "salud"
+              ]
             }
           },
           "event": [
@@ -56,7 +61,8 @@
                   "pm.collectionVariables.set('sufijo', Date.now().toString(36));",
                   "pm.collectionVariables.set('fechaReserva', new Date(Date.now() + 86400000).toISOString().slice(0, 10));",
                   "pm.collectionVariables.set('fechaTurno', new Date(Date.now() + (10 + Date.now() % 13) * 86400000).toISOString().slice(0, 10));",
-                  "pm.collectionVariables.set('fechaEvento', new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));"
+                  "pm.collectionVariables.set('fechaEvento', new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));",
+                  "pm.collectionVariables.set('usuarioLogueadoId', d.usuario.id);"
                 ]
               }
             }
@@ -64,17 +70,30 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"admin@correo.mx\",\n  \"contrasena\": \"Admin1234\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["api", "auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
             }
           }
         },
@@ -83,12 +102,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/auth/mi-perfil",
-              "host": ["{{base_url}}"],
-              "path": ["api", "auth", "mi-perfil"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "mi-perfil"
+              ]
             }
           },
           "event": [
@@ -106,21 +134,136 @@
           ]
         },
         {
+          "name": "PUT /api/auth/mi-perfil (actualiza el telefono)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Telefono guardado', () => pm.expect(pm.response.json().datos.telefono).to.equal('3005556666'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"3005556666\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/mi-perfil",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "mi-perfil"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/registro (rol cliente por defecto)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sufijo')) pm.collectionVariables.set('sufijo', Date.now().toString(36));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Location', () => pm.response.to.have.header('Location'));",
+                  "pm.collectionVariables.set('usuarioRegistroId', pm.response.json().datos.usuario.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Cliente\",\n  \"apellido\": \"Postman {{sufijo}}\",\n  \"email\": \"registro{{sufijo}}@correo.mx\",\n  \"contrasena\": \"Clave1234\",\n  \"telefono\": \"3001234567\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/registro",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "registro"
+              ]
+            }
+          }
+        },
+        {
           "name": "POST /api/auth/recuperar-password",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"admin@correo.mx\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/auth/recuperar-password",
-              "host": ["{{base_url}}"],
-              "path": ["api", "auth", "recuperar-password"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "recuperar-password"
+              ]
             }
           },
           "event": [
@@ -130,11 +273,70 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Mensaje de correo enviado', () => pm.expect(pm.response.json().ok).to.be.true);"
+                  "pm.test('Mensaje de correo enviado', () => pm.expect(pm.response.json().ok).to.be.true);",
+                  "const r = pm.response.json();",
+                  "if (r.datos && r.datos.codigo) pm.collectionVariables.set('codigoRecuperacion', r.datos.codigo);"
                 ]
               }
             }
           ]
+        },
+        {
+          "name": "POST /api/auth/restablecer-password (paso 2: codigo + clave)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('codigoRecuperacion')) pm.collectionVariables.set('codigoRecuperacion', '000000');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Contrasena restablecida', () => pm.expect(pm.response.json().ok).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@correo.mx\",\n  \"codigo\": \"{{codigoRecuperacion}}\",\n  \"contrasena\": \"Admin1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/restablecer-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "restablecer-password"
+              ]
+            }
+          }
         }
       ]
     },
@@ -147,12 +349,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/bitacora",
-              "host": ["{{base_url}}"],
-              "path": ["api", "bitacora"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bitacora"
+              ]
             }
           },
           "event": [
@@ -169,16 +379,316 @@
           ]
         },
         {
+          "name": "GET /api/bitacora/usuarios/:idRegistro (movimientos del admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Detalle en lista', () => pm.expect(pm.response.json().ok).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bitacora/usuarios/{{usuarioLogueadoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "bitacora",
+                "usuarios",
+                "{{usuarioLogueadoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/permisos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/permisos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "permisos"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('19 permisos de la semilla', () => pm.expect(pm.response.json().datos.length).to.be.at.least(19));",
+                  "const lista = pm.response.json().datos || [];",
+                  "if (lista.length) pm.collectionVariables.set('permisoAsignarId', lista[0].id);",
+                  "if (lista.length > 1) pm.collectionVariables.set('permisoAsignar2Id', lista[1].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/permisos (demo)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('sufijo')) pm.collectionVariables.set('sufijo', Date.now().toString(36));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('permisoDemoId', pm.response.json().datos.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombrePermiso\": \"demo.{{sufijo}}\",\n  \"descripcion\": \"Permiso de prueba creado por Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/permisos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "permisos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/permisos/:id (demo)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descripcion\": \"Descripcion editada por Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/permisos/{{permisoDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "permisos",
+                "{{permisoDemoId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/permisos/:id (detalle del demo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/permisos/{{permisoDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "permisos",
+                "{{permisoDemoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/permisos/:id/estado (demo -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/permisos/{{permisoDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "permisos",
+                "{{permisoDemoId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/permisos/:id (demo, cierra ciclo)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/permisos/{{permisoDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "permisos",
+                "{{permisoDemoId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "GET /api/roles",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/roles",
-              "host": ["{{base_url}}"],
-              "path": ["api", "roles"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles"
+              ]
             }
           },
           "event": [
@@ -225,18 +735,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombreRol\": \"auditor {{sufijo}}\",\n  \"descripcion\": \"Rol de prueba creado por Postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/roles",
-              "host": ["{{base_url}}"],
-              "path": ["api", "roles"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles"
+              ]
             }
           }
         },
@@ -245,18 +770,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombreRol\": \"auditor {{sufijo}}\",\n  \"descripcion\": \"Descripcion editada por Postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/roles/{{rolDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "roles", "{{rolDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}"
+              ]
             }
           },
           "event": [
@@ -273,41 +814,7 @@
           ]
         },
         {
-          "name": "DELETE /api/roles/:id (demo, cierra ciclo)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/roles/{{rolDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "roles", "{{rolDemoId}}"]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET /api/permisos",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/permisos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "permisos"]
-            }
-          },
+          "name": "GET /api/roles/:id (detalle e incluye permisos)",
           "event": [
             {
               "listen": "test",
@@ -315,31 +822,91 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('19 permisos de la semilla', () => pm.expect(pm.response.json().datos.length).to.be.at.least(19));"
+                  "pm.test('Rol encontrado', () => pm.expect(pm.response.json().datos).to.exist);"
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/roles/{{rolDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}"
+              ]
+            }
+          }
         },
         {
-          "name": "POST /api/permisos (demo)",
+          "name": "PATCH /api/roles/:id/estado (demo -> inactivo)",
           "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (!pm.collectionVariables.get('sufijo')) pm.collectionVariables.set('sufijo', Date.now().toString(36));"
-                ]
-              }
-            },
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set('permisoDemoId', pm.response.json().datos.id);"
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/roles/{{rolDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/roles/:id/permisos (asigna el permiso capturado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Confirmado por el total de permisos', () => pm.expect(pm.response.json().datos.totalPermisos).to.be.at.least(1));",
+                  "pm.collectionVariables.set('rolPermisoAsignadoId', pm.collectionVariables.get('permisoAsignarId'));"
                 ]
               }
             }
@@ -347,61 +914,181 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombrePermiso\": \"demo.{{sufijo}}\",\n  \"descripcion\": \"Permiso de prueba creado por Postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n  \"idPermiso\": {{permisoAsignarId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
-              "raw": "{{base_url}}/api/permisos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "permisos"]
+              "raw": "{{base_url}}/api/roles/{{rolDemoId}}/permisos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}",
+                "permisos"
+              ]
             }
           }
         },
         {
-          "name": "PUT /api/permisos/:id (demo)",
+          "name": "POST /api/roles/:id/permisos (asigna un segundo permiso)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Ahora el rol tiene al menos 2', () => pm.expect(pm.response.json().datos.totalPermisos).to.be.at.least(2));",
+                  "pm.collectionVariables.set('rolPermisoAsignado2Id', pm.collectionVariables.get('permisoAsignar2Id'));"
+                ]
+              }
+            }
+          ],
           "request": {
-            "method": "PUT",
+            "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"descripcion\": \"Descripcion editada por Postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n  \"idPermiso\": {{permisoAsignar2Id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
-              "raw": "{{base_url}}/api/permisos/{{permisoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "permisos", "{{permisoDemoId}}"]
+              "raw": "{{base_url}}/api/roles/{{rolDemoId}}/permisos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}",
+                "permisos"
+              ]
             }
-          },
+          }
+        },
+        {
+          "name": "DELETE /api/roles/:id/permisos/:idPermiso (lo quita de vuelta)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Queda al menos un permiso', () => pm.expect(pm.response.json().datos.length).to.be.at.least(1));"
+                ]
               }
             }
-          ]
-        },
-        {
-          "name": "DELETE /api/permisos/:id (demo, cierra ciclo)",
+          ],
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
-              "raw": "{{base_url}}/api/permisos/{{permisoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "permisos", "{{permisoDemoId}}"]
+              "raw": "{{base_url}}/api/roles/{{rolDemoId}}/permisos/{{rolPermisoAsignadoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}",
+                "permisos",
+                "{{rolPermisoAsignadoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/roles/:id/permisos/:idPermiso (409: conserva al menos 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409: el rol no puede quedar vacio', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/roles/{{rolDemoId}}/permisos/{{rolPermisoAsignado2Id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}",
+                "permisos",
+                "{{rolPermisoAsignado2Id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/roles/:id (demo, cierra ciclo)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/roles/{{rolDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "roles",
+                "{{rolDemoId}}"
+              ]
             }
           },
           "event": [
@@ -409,7 +1096,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -419,12 +1108,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/usuarios",
-              "host": ["{{base_url}}"],
-              "path": ["api", "usuarios"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
             }
           },
           "event": [
@@ -468,18 +1165,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idRol\": {{rolAdminId}},\n  \"nombre\": \"Prueba\",\n  \"apellido\": \"Postman {{sufijo}}\",\n  \"email\": \"usuario{{sufijo}}@correo.mx\",\n  \"contrasena\": \"Clave1234\",\n  \"telefono\": \"3000000002\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/usuarios",
-              "host": ["{{base_url}}"],
-              "path": ["api", "usuarios"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
             }
           }
         },
@@ -488,12 +1200,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/usuarios/{{usuarioDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "usuarios", "{{usuarioDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioDemoId}}"
+              ]
             }
           },
           "event": [
@@ -510,16 +1231,120 @@
           ]
         },
         {
+          "name": "PUT /api/usuarios/:id (edita el telefono)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"3001112233\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/{{usuarioDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioDemoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/usuarios/:id/estado (demo -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usuarios/{{usuarioDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioDemoId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
           "name": "DELETE /api/usuarios/:id (demo, cierra ciclo)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/usuarios/{{usuarioDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "usuarios", "{{usuarioDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{usuarioDemoId}}"
+              ]
             }
           },
           "event": [
@@ -527,7 +1352,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -537,12 +1364,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/proveedores",
-              "host": ["{{base_url}}"],
-              "path": ["api", "proveedores"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "proveedores"
+              ]
             }
           },
           "event": [
@@ -561,7 +1396,7 @@
           ]
         },
         {
-          "name": "POST /api/proveedores (demo, sin DELETE: la ruta no existe; se edita)",
+          "name": "POST /api/proveedores (demo)",
           "event": [
             {
               "listen": "prerequest",
@@ -586,18 +1421,67 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Proveedor Demo {{sufijo}}\",\n  \"email\": \"proveedor{{sufijo}}@correo.mx\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/proveedores",
-              "host": ["{{base_url}}"],
-              "path": ["api", "proveedores"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "proveedores"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/proveedores/:id (detalle del demo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/proveedores/{{proveedorDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "proveedores",
+                "{{proveedorDemoId}}"
+              ]
             }
           }
         },
@@ -606,18 +1490,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Proveedor Demo {{sufijo}} editado\",\n  \"email\": \"proveedor{{sufijo}}@correo.mx\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/proveedores/{{proveedorDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "proveedores", "{{proveedorDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "proveedores",
+                "{{proveedorDemoId}}"
+              ]
             }
           },
           "event": [
@@ -634,16 +1534,107 @@
           ]
         },
         {
+          "name": "PATCH /api/proveedores/:id/estado (demo -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/proveedores/{{proveedorDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "proveedores",
+                "{{proveedorDemoId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/proveedores/:id (cierra ciclo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Proveedor borrado', () => pm.expect(pm.response.json().datos).to.exist);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/proveedores/{{proveedorDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "proveedores",
+                "{{proveedorDemoId}}"
+              ]
+            }
+          }
+        },
+        {
           "name": "GET /api/productos",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/productos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "productos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "productos"
+              ]
             }
           },
           "event": [
@@ -669,12 +1660,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/productos/{{productoCervezaId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "productos", "{{productoCervezaId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "productos",
+                "{{productoCervezaId}}"
+              ]
             }
           },
           "event": [
@@ -717,18 +1717,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Producto Demo {{sufijo}}\",\n  \"descripcion\": \"Creado por Postman\",\n  \"precioVenta\": 9900,\n  \"stockActual\": 10,\n  \"stockMinimo\": 2,\n  \"stockMaximo\": 30\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/productos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "productos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "productos"
+              ]
             }
           }
         },
@@ -737,18 +1752,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Producto Demo {{sufijo}}\",\n  \"descripcion\": \"Editado por Postman\",\n  \"precioVenta\": 10500,\n  \"stockActual\": 15,\n  \"stockMinimo\": 2,\n  \"stockMaximo\": 30,\n  \"estado\": \"activo\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/productos/{{productoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "productos", "{{productoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "productos",
+                "{{productoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -769,18 +1800,35 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"inactivo\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/productos/{{productoDemoId}}/estado",
-              "host": ["{{base_url}}"],
-              "path": ["api", "productos", "{{productoDemoId}}", "estado"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "productos",
+                "{{productoDemoId}}",
+                "estado"
+              ]
             }
           },
           "event": [
@@ -801,12 +1849,21 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/productos/{{productoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "productos", "{{productoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "productos",
+                "{{productoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -814,7 +1871,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -824,12 +1883,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/servicios",
-              "host": ["{{base_url}}"],
-              "path": ["api", "servicios"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "servicios"
+              ]
             }
           },
           "event": [
@@ -874,18 +1941,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Servicio Demo {{sufijo}}\",\n  \"descripcion\": \"Creado por Postman\",\n  \"precio\": 12345\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/servicios",
-              "host": ["{{base_url}}"],
-              "path": ["api", "servicios"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "servicios"
+              ]
             }
           }
         },
@@ -894,18 +1976,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Servicio Demo {{sufijo}} v2\",\n  \"precio\": 13000,\n  \"estado\": \"activo\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/servicios/{{servicioDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "servicios", "{{servicioDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "servicios",
+                "{{servicioDemoId}}"
+              ]
             }
           },
           "event": [
@@ -922,16 +2020,107 @@
           ]
         },
         {
+          "name": "GET /api/servicios/:id (detalle del demo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/servicios/{{servicioDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "servicios",
+                "{{servicioDemoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/servicios/:id/estado (demo -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/servicios/{{servicioDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "servicios",
+                "{{servicioDemoId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
           "name": "DELETE /api/servicios/:id (demo, cierra ciclo)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/servicios/{{servicioDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "servicios", "{{servicioDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "servicios",
+                "{{servicioDemoId}}"
+              ]
             }
           },
           "event": [
@@ -939,7 +2128,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -949,12 +2140,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/categorias/clientes",
-              "host": ["{{base_url}}"],
-              "path": ["api", "categorias", "clientes"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "clientes"
+              ]
             }
           },
           "event": [
@@ -999,18 +2199,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Frecuentes {{sufijo}}\",\n  \"descripcion\": \"Creada por Postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/categorias/clientes",
-              "host": ["{{base_url}}"],
-              "path": ["api", "categorias", "clientes"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "clientes"
+              ]
             }
           }
         },
@@ -1019,18 +2235,35 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Frecuentes {{sufijo}} v2\",\n  \"descripcion\": \"Editada por Postman\",\n  \"estado\": \"activo\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/categorias/clientes/{{catClienteDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "categorias", "clientes", "{{catClienteDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "clientes",
+                "{{catClienteDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1038,22 +2271,118 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
+        },
+        {
+          "name": "GET /api/categorias/clientes/:id (detalle del demo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/categorias/clientes/{{catClienteDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "clientes",
+                "{{catClienteDemoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/categorias/clientes/:id/estado (demo -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/categorias/clientes/{{catClienteDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "clientes",
+                "{{catClienteDemoId}}",
+                "estado"
+              ]
+            }
+          }
         },
         {
           "name": "DELETE /api/categorias/clientes/:id (demo, cierra ciclo)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/categorias/clientes/{{catClienteDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "categorias", "clientes", "{{catClienteDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "clientes",
+                "{{catClienteDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1061,22 +2390,33 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
         },
         {
-          "name": "GET /api/categorias/empleados (solo lectura: el nombre es un enum fijo)",
+          "name": "GET /api/categorias/empleados (4 cargos fijos del enum)",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/categorias/empleados",
-              "host": ["{{base_url}}"],
-              "path": ["api", "categorias", "empleados"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "empleados"
+              ]
             }
           },
           "event": [
@@ -1089,23 +2429,167 @@
                   "const lista = pm.response.json().datos || [];",
                   "const mesero = lista.find((c) => c.nombre === 'mesero');",
                   "pm.test('Encuentra cargo mesero', () => pm.expect(mesero).to.exist);",
-                  "pm.collectionVariables.set('catEmpleadoMeseroId', mesero.id);"
+                  "pm.collectionVariables.set('catEmpleadoMeseroId', mesero.id);",
+                  "const dj = lista.find((c) => c.nombre === 'DJ');",
+                  "if (dj) pm.collectionVariables.set('catEmpleadoDjId', dj.id);"
                 ]
               }
             }
           ]
         },
         {
+          "name": "PATCH /api/categorias/empleados/:id/estado (DJ -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/categorias/empleados/{{catEmpleadoDjId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "empleados",
+                "{{catEmpleadoDjId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/categorias/empleados/:id/estado (DJ -> activo, restaura)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"activo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/categorias/empleados/{{catEmpleadoDjId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "empleados",
+                "{{catEmpleadoDjId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/categorias/empleados/:id (409: tiene empleados)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409: la categoria esta en uso', () => pm.response.to.have.status(409));",
+                  "pm.test('Error de conflicto', () => pm.expect(pm.response.json().error).to.exist);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/categorias/empleados/{{catEmpleadoDjId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categorias",
+                "empleados",
+                "{{catEmpleadoDjId}}"
+              ]
+            }
+          }
+        },
+        {
           "name": "GET /api/clientes",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/clientes",
-              "host": ["{{base_url}}"],
-              "path": ["api", "clientes"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clientes"
+              ]
             }
           },
           "event": [
@@ -1131,12 +2615,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/clientes/{{clienteCarlosId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "clientes", "{{clienteCarlosId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clientes",
+                "{{clienteCarlosId}}"
+              ]
             }
           },
           "event": [
@@ -1178,18 +2671,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCategoriaCliente\": {{catClienteGeneralId}},\n  \"nombre\": \"Pedro\",\n  \"apellido\": \"Postman {{sufijo}}\",\n  \"documento\": \"PM-{{sufijo}}\",\n  \"telefono\": \"3000000003\",\n  \"email\": \"pm{{sufijo}}@correo.mx\",\n  \"fechaNacimiento\": \"1993-04-04\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/clientes",
-              "host": ["{{base_url}}"],
-              "path": ["api", "clientes"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clientes"
+              ]
             }
           }
         },
@@ -1198,18 +2706,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCategoriaCliente\": {{catClienteGeneralId}},\n  \"nombre\": \"Pedro\",\n  \"apellido\": \"Postman {{sufijo}}\",\n  \"documento\": \"PM-{{sufijo}}\",\n  \"telefono\": \"3000000004\",\n  \"email\": \"pm{{sufijo}}@correo.mx\",\n  \"fechaNacimiento\": \"1993-04-04\",\n  \"estado\": \"activo\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/clientes/{{clienteDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "clientes", "{{clienteDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clientes",
+                "{{clienteDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1226,16 +2750,73 @@
           ]
         },
         {
+          "name": "PATCH /api/clientes/:id/estado (demo -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clientes/{{clienteDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clientes",
+                "{{clienteDemoId}}",
+                "estado"
+              ]
+            }
+          }
+        },
+        {
           "name": "DELETE /api/clientes/:id (demo, cierra ciclo)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/clientes/{{clienteDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "clientes", "{{clienteDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clientes",
+                "{{clienteDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1243,7 +2824,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -1253,12 +2836,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/empleados",
-              "host": ["{{base_url}}"],
-              "path": ["api", "empleados"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "empleados"
+              ]
             }
           },
           "event": [
@@ -1303,18 +2894,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCategoriaEmpleado\": {{catEmpleadoMeseroId}},\n  \"nombre\": \"Hugo\",\n  \"apellido\": \"Postman {{sufijo}}\",\n  \"documento\": \"PME-{{sufijo}}\",\n  \"telefono\": \"3000000005\",\n  \"email\": \"emp{{sufijo}}@correo.mx\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/empleados",
-              "host": ["{{base_url}}"],
-              "path": ["api", "empleados"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "empleados"
+              ]
             }
           }
         },
@@ -1323,18 +2929,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCategoriaEmpleado\": {{catEmpleadoMeseroId}},\n  \"nombre\": \"Hugo\",\n  \"apellido\": \"Postman {{sufijo}}\",\n  \"documento\": \"PME-{{sufijo}}\",\n  \"telefono\": \"3000000006\",\n  \"email\": \"emp{{sufijo}}@correo.mx\",\n  \"estado\": \"activo\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/empleados/{{empleadoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "empleados", "{{empleadoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "empleados",
+                "{{empleadoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1342,22 +2964,115 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
+        },
+        {
+          "name": "GET /api/empleados/:id (detalle del demo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/empleados/{{empleadoDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "empleados",
+                "{{empleadoDemoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/empleados/:id/estado (demo -> inactivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"inactivo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/empleados/{{empleadoDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "empleados",
+                "{{empleadoDemoId}}",
+                "estado"
+              ]
+            }
+          }
         },
         {
           "name": "DELETE /api/empleados/:id (demo, cierra ciclo)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/empleados/{{empleadoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "empleados", "{{empleadoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "empleados",
+                "{{empleadoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1365,7 +3080,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -1381,12 +3098,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/inventario/alertas",
-              "host": ["{{base_url}}"],
-              "path": ["api", "inventario", "alertas"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "inventario",
+                "alertas"
+              ]
             }
           },
           "event": [
@@ -1407,12 +3133,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/compras",
-              "host": ["{{base_url}}"],
-              "path": ["api", "compras"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras"
+              ]
             }
           },
           "event": [
@@ -1420,7 +3154,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -1430,18 +3166,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idProveedor\": {{proveedorId}},\n  \"detalles\": [\n    { \"idProducto\": {{productoCervezaId}}, \"cantidad\": 5, \"precioUnitario\": 6000 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/compras",
-              "host": ["{{base_url}}"],
-              "path": ["api", "compras"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras"
+              ]
             }
           },
           "event": [
@@ -1458,16 +3209,74 @@
           ]
         },
         {
+          "name": "PUT /api/compras/:id (edita la linea antes de confirmar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Sigue pendiente', () => pm.expect(pm.response.json().datos.estado).to.equal('pendiente'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idProveedor\": {{proveedorId}},\n  \"detalles\": [\n    { \"idProducto\": {{productoCervezaId}}, \"cantidad\": 7, \"precioUnitario\": 6200 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/compras/{{compraDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras",
+                "{{compraDemoId}}"
+              ]
+            }
+          }
+        },
+        {
           "name": "POST /api/compras/:id/confirmar (suma stock, RN-01)",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/compras/{{compraDemoId}}/confirmar",
-              "host": ["{{base_url}}"],
-              "path": ["api", "compras", "{{compraDemoId}}", "confirmar"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras",
+                "{{compraDemoId}}",
+                "confirmar"
+              ]
             }
           },
           "event": [
@@ -1488,12 +3297,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/compras/{{compraDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "compras", "{{compraDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras",
+                "{{compraDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1514,18 +3332,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idProveedor\": {{proveedorId}},\n  \"detalles\": [\n    { \"idProducto\": {{productoCervezaId}}, \"cantidad\": 1, \"precioUnitario\": 6000 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/compras",
-              "host": ["{{base_url}}"],
-              "path": ["api", "compras"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras"
+              ]
             }
           },
           "event": [
@@ -1546,12 +3379,21 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/compras/{{compraBorraId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "compras", "{{compraBorraId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras",
+                "{{compraBorraId}}"
+              ]
             }
           },
           "event": [
@@ -1559,22 +3401,115 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
+        },
+        {
+          "name": "POST /api/compras (otra pendiente, para cancelar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('compraCancelaId', pm.response.json().datos.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idProveedor\": {{proveedorId}},\n  \"detalles\": [\n    { \"idProducto\": {{productoCervezaId}}, \"cantidad\": 1, \"precioUnitario\": 6000 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/compras",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/compras/:id/cancelar (pasa a anulada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Estado anulada', () => pm.expect(pm.response.json().datos.estado).to.equal('anulada'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/compras/{{compraCancelaId}}/cancelar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "compras",
+                "{{compraCancelaId}}",
+                "cancelar"
+              ]
+            }
+          }
         },
         {
           "name": "GET /api/agenda (empleados)",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/agenda",
-              "host": ["{{base_url}}"],
-              "path": ["api", "agenda"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda"
+              ]
             }
           },
           "event": [
@@ -1582,7 +3517,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -1614,18 +3551,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idEmpleado\": {{empleadoMeseroId}},\n  \"idServicio\": {{servicioBarraId}},\n  \"fecha\": \"{{fechaTurno}}\",\n  \"horaInicio\": \"09:00\",\n  \"horaFin\": \"12:00\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/agenda",
-              "host": ["{{base_url}}"],
-              "path": ["api", "agenda"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda"
+              ]
             }
           }
         },
@@ -1634,18 +3586,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idEmpleado\": {{empleadoMeseroId}},\n  \"idServicio\": {{servicioBarraId}},\n  \"fecha\": \"{{fechaTurno}}\",\n  \"horaInicio\": \"09:30\",\n  \"horaFin\": \"12:00\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/agenda/{{turnoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "agenda", "{{turnoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda",
+                "{{turnoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1655,7 +3623,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Hora de inicio editada', () => pm.expect(pm.response.json().datos.horaInicio).to.equal('09:30'));"
+                  "pm.test('Hora de inicio editada', () => pm.expect(pm.response.json().datos.horaInicio).to.equal('09:30:00'));"
                 ]
               }
             }
@@ -1666,18 +3634,35 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"completada\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/agenda/{{turnoDemoId}}/estado",
-              "host": ["{{base_url}}"],
-              "path": ["api", "agenda", "{{turnoDemoId}}", "estado"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda",
+                "{{turnoDemoId}}",
+                "estado"
+              ]
             }
           },
           "event": [
@@ -1698,12 +3683,21 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/agenda/{{turnoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "agenda", "{{turnoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda",
+                "{{turnoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1711,7 +3705,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -1721,12 +3717,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reservas",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reservas"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas"
+              ]
             }
           },
           "event": [
@@ -1734,7 +3738,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -1768,18 +3774,67 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCliente\": {{clienteCarlosId}},\n  \"tipoEspacio\": \"mesa\",\n  \"identificadorEspacio\": \"MESA-{{sufijo}}\",\n  \"fecha\": \"{{fechaReserva}}\",\n  \"hora\": \"22:00\",\n  \"detalles\": [\n    { \"idServicio\": {{servicioBarraId}}, \"cantidad\": 1 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/reservas",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reservas"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/reservas/:id (detalle del demo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/reservas/{{reservaDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas",
+                "{{reservaDemoId}}"
+              ]
             }
           }
         },
@@ -1788,18 +3843,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCliente\": {{clienteCarlosId}},\n  \"tipoEspacio\": \"mesa\",\n  \"identificadorEspacio\": \"MESA-{{sufijo}}\",\n  \"fecha\": \"{{fechaReserva}}\",\n  \"hora\": \"23:00\",\n  \"estado\": \"pendiente\",\n  \"detalles\": [\n    { \"idServicio\": {{servicioBarraId}}, \"cantidad\": 1 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/reservas/{{reservaDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reservas", "{{reservaDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas",
+                "{{reservaDemoId}}"
+              ]
             }
           },
           "event": [
@@ -1809,7 +3880,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Hora actualizada', () => pm.expect(pm.response.json().datos.hora).to.equal('23:00'));"
+                  "pm.test('Hora actualizada', () => pm.expect(pm.response.json().datos.hora).to.equal('23:00:00'));"
                 ]
               }
             }
@@ -1820,18 +3891,35 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"estado\": \"confirmada\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/reservas/{{reservaDemoId}}/estado",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reservas", "{{reservaDemoId}}", "estado"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas",
+                "{{reservaDemoId}}",
+                "estado"
+              ]
             }
           },
           "event": [
@@ -1852,12 +3940,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reservas/{{reservaDemoId}}/qr",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reservas", "{{reservaDemoId}}", "qr"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas",
+                "{{reservaDemoId}}",
+                "qr"
+              ]
             }
           },
           "event": [
@@ -1881,18 +3979,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"codigoQr\": \"{{codigoQr}}\",\n  \"puertaAcceso\": \"Puerta principal\",\n  \"tipoDispositivo\": \"movil\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/ingresos/validar",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ingresos", "validar"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ingresos",
+                "validar"
+              ]
             }
           },
           "event": [
@@ -1901,7 +4015,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status 200', () => pm.response.to.have.status(201));",
                   "pm.test('Ingreso valido', () => pm.expect(pm.response.json().datos.estado).to.equal('valido'));"
                 ]
               }
@@ -1913,12 +4027,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/ingresos/aforo",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ingresos", "aforo"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ingresos",
+                "aforo"
+              ]
             }
           },
           "event": [
@@ -1941,12 +4064,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/ingresos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ingresos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ingresos"
+              ]
             }
           },
           "event": [
@@ -1954,7 +4085,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -1987,18 +4120,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCliente\": {{clienteCarlosId}},\n  \"tipoEspacio\": \"mesa\",\n  \"identificadorEspacio\": \"MESA2-{{sufijo}}\",\n  \"fecha\": \"{{fechaReserva}}\",\n  \"hora\": \"21:00\",\n  \"detalles\": [\n    { \"idServicio\": {{servicioBarraId}}, \"cantidad\": 1 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/reservas",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reservas"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas"
+              ]
             }
           }
         },
@@ -2007,12 +4155,21 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reservas/{{reservaBorraId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reservas", "{{reservaBorraId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reservas",
+                "{{reservaBorraId}}"
+              ]
             }
           },
           "event": [
@@ -2020,7 +4177,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2030,12 +4189,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/ventas",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas"
+              ]
             }
           },
           "event": [
@@ -2043,7 +4210,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2053,18 +4222,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCliente\": {{clienteJorgeId}},\n  \"metodoPago\": \"tarjeta\",\n  \"detalles\": [\n    { \"idProducto\": {{productoCervezaId}}, \"cantidad\": 2 },\n    { \"idProducto\": {{productoGaseosaId}}, \"cantidad\": 3 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/ventas",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas"
+              ]
             }
           },
           "event": [
@@ -2086,12 +4270,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/ventas/{{ventaDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas", "{{ventaDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas",
+                "{{ventaDemoId}}"
+              ]
             }
           },
           "event": [
@@ -2112,18 +4305,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCliente\": {{clienteJorgeId}},\n  \"metodoPago\": \"efectivo\",\n  \"detalles\": [\n    { \"idProducto\": {{productoCervezaId}}, \"cantidad\": 2 },\n    { \"idProducto\": {{productoGaseosaId}}, \"cantidad\": 3 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/ventas/{{ventaDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas", "{{ventaDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas",
+                "{{ventaDemoId}}"
+              ]
             }
           },
           "event": [
@@ -2144,12 +4353,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/ventas/{{ventaDemoId}}/pagar",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas", "{{ventaDemoId}}", "pagar"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas",
+                "{{ventaDemoId}}",
+                "pagar"
+              ]
             }
           },
           "event": [
@@ -2172,12 +4391,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/ventas/{{ventaDemoId}}/anular",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas", "{{ventaDemoId}}", "anular"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas",
+                "{{ventaDemoId}}",
+                "anular"
+              ]
             }
           },
           "event": [
@@ -2198,18 +4427,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCliente\": {{clienteJorgeId}},\n  \"metodoPago\": \"efectivo\",\n  \"detalles\": [\n    { \"idProducto\": {{productoCervezaId}}, \"cantidad\": 1 }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/ventas",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas"
+              ]
             }
           },
           "event": [
@@ -2230,12 +4474,21 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/ventas/{{ventaBorraId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "ventas", "{{ventaBorraId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ventas",
+                "{{ventaBorraId}}"
+              ]
             }
           },
           "event": [
@@ -2243,7 +4496,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2253,12 +4508,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/puntos/{{clienteJorgeId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "puntos", "{{clienteJorgeId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "puntos",
+                "{{clienteJorgeId}}"
+              ]
             }
           },
           "event": [
@@ -2279,18 +4543,35 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"cantidad\": 50\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/puntos/{{clienteJorgeId}}/canjear",
-              "host": ["{{base_url}}"],
-              "path": ["api", "puntos", "{{clienteJorgeId}}", "canjear"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "puntos",
+                "{{clienteJorgeId}}",
+                "canjear"
+              ]
             }
           },
           "event": [
@@ -2324,25 +4605,42 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 201', () => pm.response.to.have.status(201));"]
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));"
+                ]
               }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idCliente\": {{clienteCarlosId}},\n  \"tipo\": \"promocion\",\n  \"canal\": \"email\",\n  \"mensaje\": \"Promo Postman {{sufijo}}: 2x1 en la barra\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/notificaciones",
-              "host": ["{{base_url}}"],
-              "path": ["api", "notificaciones"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notificaciones"
+              ]
             }
           }
         },
@@ -2351,12 +4649,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/notificaciones",
-              "host": ["{{base_url}}"],
-              "path": ["api", "notificaciones"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notificaciones"
+              ]
             }
           },
           "event": [
@@ -2364,7 +4670,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2374,12 +4682,21 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/notificaciones/cumpleanos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "notificaciones", "cumpleanos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notificaciones",
+                "cumpleanos"
+              ]
             }
           },
           "event": [
@@ -2400,12 +4717,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/eventos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos"
+              ]
             }
           },
           "event": [
@@ -2450,18 +4775,33 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombre\": \"Evento Demo {{sufijo}}\",\n  \"tematica\": \"Demo Postman\",\n  \"tipoEvento\": \"fiesta_privada\",\n  \"fecha\": \"{{fechaEvento}}\",\n  \"horaInicio\": \"20:00\",\n  \"horaFin\": \"02:00\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n  \"nombre\": \"Evento Demo {{sufijo}}\",\n  \"tematica\": \"Demo Postman\",\n  \"tipoEvento\": \"fiesta_privada\",\n  \"fecha\": \"{{fechaEvento}}\",\n  \"horaInicio\": \"20:00\",\n  \"horaFin\": \"23:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/eventos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos"
+              ]
             }
           }
         },
@@ -2470,12 +4810,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos", "{{eventoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -2496,18 +4845,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombre\": \"Evento Demo {{sufijo}} v2\",\n  \"tematica\": \"Demo Postman\",\n  \"tipoEvento\": \"tematico\",\n  \"fecha\": \"{{fechaEvento}}\",\n  \"horaInicio\": \"20:00\",\n  \"horaFin\": \"02:00\",\n  \"estado\": \"programado\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n  \"nombre\": \"Evento Demo {{sufijo}} v2\",\n  \"tematica\": \"Demo Postman\",\n  \"tipoEvento\": \"tematico\",\n  \"fecha\": \"{{fechaEvento}}\",\n  \"horaInicio\": \"20:00\",\n  \"horaFin\": \"23:00\",\n  \"estado\": \"programado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos", "{{eventoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -2528,18 +4893,35 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"tematica\": \"Demo Postman\",\n  \"franjaHoraria\": \"18:00 - 22:00\",\n  \"cantidadInvitados\": 80,\n  \"observaciones\": \"Creada por Postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}/ficha",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos", "{{eventoDemoId}}", "ficha"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}",
+                "ficha"
+              ]
             }
           },
           "event": [
@@ -2547,7 +4929,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 201', () => pm.response.to.have.status(201));"]
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));"
+                ]
               }
             }
           ]
@@ -2557,12 +4941,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}/ficha",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos", "{{eventoDemoId}}", "ficha"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}",
+                "ficha"
+              ]
             }
           },
           "event": [
@@ -2579,16 +4973,75 @@
           ]
         },
         {
+          "name": "PUT /api/eventos/:id/ficha (actualiza la ficha)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Invitados 120', () => pm.expect(pm.response.json().datos.cantidadInvitados).to.equal(120));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tematica\": \"Demo Postman\",\n  \"franjaHoraria\": \"19:00 - 23:00\",\n  \"cantidadInvitados\": 120,\n  \"observaciones\": \"Editada por Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}/ficha",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}",
+                "ficha"
+              ]
+            }
+          }
+        },
+        {
           "name": "DELETE /api/eventos/:id/ficha (habilita borrar el evento)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}/ficha",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos", "{{eventoDemoId}}", "ficha"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}",
+                "ficha"
+              ]
             }
           },
           "event": [
@@ -2596,7 +5049,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2628,18 +5083,207 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"idEvento\": {{eventoDemoId}},\n  \"fecha\": \"{{fechaEvento}}\",\n  \"hora\": \"15:00\",\n  \"descripcion\": \"Montaje Postman\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/api/agenda-eventos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "agenda-eventos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda-eventos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/agenda-eventos (lista)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Trae la agenda', () => pm.expect(pm.response.json().datos).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/agenda-eventos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda-eventos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/agenda-eventos/:id (detalle)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/agenda-eventos/{{agendaDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda-eventos",
+                "{{agendaDemoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/agenda-eventos/:id (edita la hora)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const c = pm.collectionVariables;",
+                  "if (!c.get('fechaEvento')) c.set('fechaEvento', new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idEvento\": {{eventoDemoId}},\n  \"fecha\": \"{{fechaEvento}}\",\n  \"hora\": \"16:00\",\n  \"descripcion\": \"Montaje Postman editado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/agenda-eventos/{{agendaDemoId}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda-eventos",
+                "{{agendaDemoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/agenda-eventos/:id/estado (completada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Estado completada', () => pm.expect(pm.response.json().datos.estado).to.equal('completada'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"completada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/agenda-eventos/{{agendaDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda-eventos",
+                "{{agendaDemoId}}",
+                "estado"
+              ]
             }
           }
         },
@@ -2648,12 +5292,21 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/agenda-eventos/{{agendaDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "agenda-eventos", "{{agendaDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "agenda-eventos",
+                "{{agendaDemoId}}"
+              ]
             }
           },
           "event": [
@@ -2661,22 +5314,82 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
+        },
+        {
+          "name": "PATCH /api/eventos/:id/estado (-> cancelado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Estado cancelado', () => pm.expect(pm.response.json().datos.estado).to.equal('cancelado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"cancelado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}/estado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}",
+                "estado"
+              ]
+            }
+          }
         },
         {
           "name": "DELETE /api/eventos/:id (solo sin ficha)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/eventos/{{eventoDemoId}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "eventos", "{{eventoDemoId}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "eventos",
+                "{{eventoDemoId}}"
+              ]
             }
           },
           "event": [
@@ -2684,7 +5397,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2700,13 +5415,27 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/top-clientes?tipo=vip",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "top-clientes"],
-              "query": [{ "key": "tipo", "value": "vip" }]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "top-clientes"
+              ],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "vip"
+                }
+              ]
             }
           },
           "event": [
@@ -2716,7 +5445,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Top como lista', () => pm.expect(pm.response.json().datos).to.be.an('array'));"
+                  "pm.test('Top como lista de clientes', () => pm.expect(pm.response.json().datos.clientes).to.be.an('array'));\npm.test('Al menos un cliente', () => pm.expect(pm.response.json().datos.clientes).to.have.length.above(0));"
                 ]
               }
             }
@@ -2727,13 +5456,27 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/top-clientes?tipo=general",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "top-clientes"],
-              "query": [{ "key": "tipo", "value": "general" }]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "top-clientes"
+              ],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "general"
+                }
+              ]
             }
           },
           "event": [
@@ -2741,7 +5484,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2751,12 +5496,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/servicios-solicitados",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "servicios-solicitados"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "servicios-solicitados"
+              ]
             }
           },
           "event": [
@@ -2764,7 +5518,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2774,12 +5530,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/productos-menos-vendidos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "productos-menos-vendidos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "productos-menos-vendidos"
+              ]
             }
           },
           "event": [
@@ -2789,7 +5554,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Top 3', () => pm.expect(pm.response.json().datos.length).to.be.at.most(3));"
+                  "pm.test('Top 3 con productos', () => pm.expect(pm.response.json().datos.productos).to.have.length.above(0));"
                 ]
               }
             }
@@ -2800,13 +5565,27 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/ventas-por-mes?anio=2026",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "ventas-por-mes"],
-              "query": [{ "key": "anio", "value": "2026" }]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "ventas-por-mes"
+              ],
+              "query": [
+                {
+                  "key": "anio",
+                  "value": "2026"
+                }
+              ]
             }
           },
           "event": [
@@ -2814,7 +5593,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2824,12 +5605,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/ventas-mayor-menor",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "ventas-mayor-menor"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "ventas-mayor-menor"
+              ]
             }
           },
           "event": [
@@ -2837,7 +5627,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2847,12 +5639,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/ventas-subtotales",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "ventas-subtotales"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "ventas-subtotales"
+              ]
             }
           },
           "event": [
@@ -2860,7 +5661,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ]
@@ -2870,12 +5673,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/reportes/comparativo-eventos",
-              "host": ["{{base_url}}"],
-              "path": ["api", "reportes", "comparativo-eventos"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "reportes",
+                "comparativo-eventos"
+              ]
             }
           },
           "event": [
@@ -2904,12 +5716,21 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["api", "auth", "logout"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
             }
           },
           "event": [
@@ -2929,7 +5750,15 @@
     }
   ],
   "variable": [
-    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
-    { "key": "token", "value": "", "type": "string" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
   ]
 }
