@@ -108,7 +108,12 @@ function aDecimalONulo(valor) {
   if (valor === null || valor === undefined || valor === '') return null;
   if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null;
 
-  const numero = Number(String(valor).replace(/[^0-9.\-]/g, ''));
+  // Al limpiar 'gratis' queda la cadena vacia, y Number('') es 0:
+  // sin esta guarda el campo devolveria un precio de 0 en vez de null.
+  const limpio = String(valor).replace(/[^0-9.\-]/g, '');
+  if (limpio === '' || limpio === '-' || limpio === '.') return null;
+
+  const numero = Number(limpio);
   return Number.isFinite(numero) ? numero : null;
 }
 
