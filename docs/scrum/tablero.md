@@ -70,6 +70,6 @@
 
 ## Inventario final
 
-- Commits en `main`: 58+ (empujados a GitHub).
+- Commits en `main`: 57 (empujados a GitHub, HEAD `0d45b9e`, tag `v1.0-evidencia2`).
 - Pruebas unitarias: 33 en verde (`npm test`).
 - Prueba global E2E: 135 peticiones / 213 afirmaciones en verde (`npm run test:e2e`).
