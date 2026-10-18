@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "node --test",
+    "test:e2e": "node tests/e2e-corrida-global.js",
     "db:schema": "mysql -u root -p < database/01_schema.sql",
     "db:user": "mysql -u root -p < database/02_usuario_app.sql",
     "db:seed": "mysql -u root -p discoteca_api < database/03_seed.sql"
