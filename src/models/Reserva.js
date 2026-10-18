@@ -230,6 +230,7 @@ class Reserva {
       subtotal: this.#subtotal,
       total: this.total,
       estado: this.#estado,
+      pendiente: this.pendiente,
       codigoQr: this.#codigoQr
     };
 

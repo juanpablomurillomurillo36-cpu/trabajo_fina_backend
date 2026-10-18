@@ -96,7 +96,10 @@ class ProgramaPuntoRepository {
       throw AppError.conflicto('El cliente aun no tiene programa de puntos');
     }
 
-    const [resultado] = await db.ejecutar(
+    // db.ejecutar devuelve el OkPacket directo (no un arreglo),
+    // por eso se guarda sin desestructurar: destructurar lanzaba
+    // "is not iterable" y el canje caia siempre en 500.
+    const resultado = await db.ejecutar(
       `UPDATE programa_puntos
           SET puntos_canjeados = puntos_canjeados + ?
         WHERE id_programa_puntos = ?

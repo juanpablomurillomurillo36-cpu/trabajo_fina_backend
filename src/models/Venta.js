@@ -146,7 +146,8 @@ class Venta {
       total: this.#total,
       metodoPago: this.#metodoPago,
       comprobanteNo: this.#comprobanteNo,
-      estado: this.#estado
+      estado: this.#estado,
+      pendiente: this.pendiente
     };
 
     if (this.#detalles !== null) {

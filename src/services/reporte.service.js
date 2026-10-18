@@ -174,7 +174,10 @@ class ReporteService {
       fila === null || fila === undefined
         ? null
         : {
-            fecha: formato.aFechaISO(fila.fecha)?.slice(0, 10) ?? fila.fecha,
+            // MySQL entrega DATE como 'YYYY-MM-DD' (string ISO corto),
+            // por eso se normaliza con String().slice y no con formato:
+            // el utilitario no tiene aFechaISO y el reporte caia en 500.
+            fecha: String(fila.fecha).slice(0, 10),
             total: formato.redondearDosDecimales(Number(fila.total)),
             numeroVentas: Number(fila.numero_ventas)
           };
