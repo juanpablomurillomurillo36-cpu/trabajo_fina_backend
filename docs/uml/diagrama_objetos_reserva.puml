@@ -1,0 +1,183 @@
+@startuml diagrama_objetos_reserva
+' =====================================================================
+' DIAGRAMA DE OBJETOS UML - ESCENARIO 2: TRANSACCION DE NEGOCIO
+' Reserva VIP completa: cliente -> reserva (3 servicios, descuento)
+' -> confirmacion con QR -> notificacion -> ingreso validado.
+' Notacion: "objeto : Clase" (subrayado), atributo = valor, enlaces.
+' =====================================================================
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam dpi 120
+skinparam defaultFontName Arial
+skinparam ArrowColor black
+skinparam ObjectBorderColor black
+skinparam ObjectBackgroundColor white
+skinparam NoteBackgroundColor #FFFFE0
+skinparam nodesep 50
+skinparam ranksep 70
+
+title ESCENARIO 2 - RESERVA VIP COMPLETA: CLIENTE - RESERVA - INGRESO
+
+' ------------------------ Cliente y categoria ------------------------
+object "__frecuente : CategoriaCliente__" as frecuente {
+  id = 1
+  nombre = "Frecuente"
+  descripcion = "Clientes con visitas recurrentes"
+  estado = "activo"
+}
+
+object "__carlos : Cliente__" as carlos {
+  id = 1
+  idCategoriaCliente = 1
+  nombre = "Carlos"
+  apellido = "Ruiz"
+  documento = "1020304050"
+  telefono = "3109998877"
+  email = "carlos.ruiz@correo.com"
+  fechaNacimiento = "1995-03-14"
+  esVip = true
+  estado = "activo"
+}
+
+' ------------------------------ Servicios ----------------------------
+object "__mesaVip : Servicio__" as mesaVip {
+  id = 1
+  nombre = "Mesa VIP"
+  precio = 1500.00
+  estado = "activo"
+}
+
+object "__camarera : Servicio__" as camarera {
+  id = 2
+  nombre = "Camarera"
+  precio = 400.00
+  estado = "activo"
+}
+
+object "__cabinaDj : Servicio__" as cabinaDj {
+  id = 3
+  nombre = "Cabina DJ"
+  precio = 600.00
+  estado = "activo"
+}
+
+' ------------------------------ Reserva ------------------------------
+object "__reserva1 : Reserva__" as reserva1 {
+  id = 1
+  idCliente = 1
+  tipoEspacio = "vip"
+  identificadorEspacio = "VIP-01"
+  fecha = "2026-10-24"
+  hora = "22:00:00"
+  subtotal = 2900.00
+  descuento = 290.00
+  total = 2610.00
+  estado = "confirmada"
+  codigoQr = "QR-R1-8F3A2C"
+}
+
+object "__detalle1 : DetalleReserva__" as detalle1 {
+  id = 1
+  idReserva = 1
+  idServicio = 1
+  cantidad = 1
+  precioUnitario = 1500.00
+  subtotal = 1500.00
+}
+
+object "__detalle2 : DetalleReserva__" as detalle2 {
+  id = 2
+  idReserva = 1
+  idServicio = 2
+  cantidad = 2
+  precioUnitario = 400.00
+  subtotal = 800.00
+}
+
+object "__detalle3 : DetalleReserva__" as detalle3 {
+  id = 3
+  idReserva = 1
+  idServicio = 3
+  cantidad = 1
+  precioUnitario = 600.00
+  subtotal = 600.00
+}
+
+' ----------------------- Notificacion e ingreso ----------------------
+object "__notificacion1 : Notificacion__" as notificacion1 {
+  id = 1
+  idCliente = 1
+  tipo = "recordatorio"
+  canal = "email"
+  mensaje = "Tu reserva VIP-01 del 2026-10-24 22:00 fue confirmada"
+  fechaEnvio = "2026-10-18T21:30:00"
+  estado = "enviada"
+}
+
+object "__ingreso1 : Ingreso__" as ingreso1 {
+  id = 1
+  idCliente = 1
+  idReserva = 1
+  codigoQr = "QR-R1-8F3A2C"
+  fecha = "2026-10-24"
+  hora = "22:10:00"
+  puertaAcceso = "Puerta 1"
+  tipoDispositivo = "lector QR"
+  validadoPor = 2
+  estado = "valido"
+}
+
+object "__andres : Usuario__" as andres {
+  id = 2
+  idRol = 2
+  nombre = "Andres"
+  apellido = "Mora"
+  email = "andres.mora@discoteca.com"
+  estado = "activo"
+}
+
+object "__rolRecepcion : Rol__" as rolRecepcion {
+  id = 2
+  nombreRol = "recepcion"
+  estado = "activo"
+}
+
+' ------------------------------ Enlaces ------------------------------
+carlos --> frecuente : idCategoriaCliente = 1
+reserva1 --> carlos : idCliente = 1
+
+reserva1 *-- detalle1
+reserva1 *-- detalle2
+reserva1 *-- detalle3
+
+detalle1 --> mesaVip : idServicio = 1
+detalle2 --> camarera : idServicio = 2
+detalle3 --> cabinaDj : idServicio = 3
+
+notificacion1 --> carlos : idCliente = 1
+
+ingreso1 --> carlos : idCliente = 1
+ingreso1 --> reserva1 : idReserva = 1
+ingreso1 --> andres : validadoPor = 2
+andres --> rolRecepcion : idRol = 2
+
+' ------------------------------ Notas (RN) ---------------------------
+note right of reserva1
+  RN-04: con 3 o mas servicios
+  se aplica 10 % de descuento:
+  subtotal 2900.00 x 10 % = 290.00
+  total = 2900.00 - 290.00 = 2610.00
+end note
+
+note bottom of ingreso1
+  RN-05: el codigo QR vigente no se puede
+  usar dos veces (codigo_qr UNICO).
+end note
+
+note bottom of notificacion1
+  RN-12: notificacion simulada;
+  se guarda en la base y en consola.
+end note
+
+@enduml

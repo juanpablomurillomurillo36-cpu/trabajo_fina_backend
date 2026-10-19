@@ -1,0 +1,153 @@
+@startuml diagrama_objetos_seguridad
+' =====================================================================
+' DIAGRAMA DE OBJETOS UML - ESCENARIO 1: SEGURIDAD
+' usuario -> rol -> permisos (RBAC) + accesos y bitacora.
+' Notacion: "objeto : Clase" (subrayado), atributo = valor, enlaces.
+' =====================================================================
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam dpi 120
+skinparam defaultFontName Arial
+skinparam ArrowColor black
+skinparam ObjectBorderColor black
+skinparam ObjectBackgroundColor white
+skinparam NoteBackgroundColor #FFFFE0
+skinparam nodesep 50
+skinparam ranksep 70
+
+title ESCENARIO 1 - SEGURIDAD: USUARIO - ROL - PERMISOS
+
+' ---------------------------- Usuarios -------------------------------
+object "__laura : Usuario__" as laura {
+  id = 1
+  idRol = 1
+  nombre = "Laura"
+  apellido = "Gomez"
+  email = "laura.gomez@discoteca.com"
+  contrasenaHash = "$2a$10$9fQx..."
+  telefono = "3001112233"
+  estado = "activo"
+  fechaCreacion = "2026-10-01T09:00:00"
+}
+
+object "__andres : Usuario__" as andres {
+  id = 2
+  idRol = 2
+  nombre = "Andres"
+  apellido = "Mora"
+  email = "andres.mora@discoteca.com"
+  contrasenaHash = "$2a$10$Tb7Lm..."
+  telefono = "3004445566"
+  estado = "activo"
+  fechaCreacion = "2026-10-01T09:05:00"
+}
+
+' ------------------------------ Roles --------------------------------
+object "__rolAdmin : Rol__" as rolAdmin {
+  id = 1
+  nombreRol = "admin"
+  descripcion = "Acceso total al sistema"
+  estado = "activo"
+  totalPermisos = 2
+}
+
+object "__rolRecepcion : Rol__" as rolRecepcion {
+  id = 2
+  nombreRol = "recepcion"
+  descripcion = "Control de ingreso al local"
+  estado = "activo"
+  totalPermisos = 2
+}
+
+' ---------------------------- Permisos -------------------------------
+object "__pRolesCrear : Permiso__" as pRolesCrear {
+  id = 1
+  nombrePermiso = "roles.crear"
+  descripcion = "Crear roles"
+  estado = "activo"
+}
+
+object "__pVentasAnular : Permiso__" as pVentasAnular {
+  id = 2
+  nombrePermiso = "ventas.anular"
+  descripcion = "Anular ventas"
+  estado = "activo"
+}
+
+object "__pIngresosValidar : Permiso__" as pIngresosValidar {
+  id = 3
+  nombrePermiso = "ingresos.validar"
+  descripcion = "Validar codigo QR"
+  estado = "activo"
+}
+
+object "__pReservasConfirmar : Permiso__" as pReservasConfirmar {
+  id = 4
+  nombrePermiso = "reservas.confirmar"
+  descripcion = "Confirmar reservas"
+  estado = "activo"
+}
+
+' ------------------------ Auditoria (C8) -----------------------------
+object "__accesoLaura : Acceso__" as accesoLaura {
+  id = 1
+  idUsuario = 1
+  tipoAccion = "login"
+  fechaHora = "2026-10-18T20:00:00"
+  ipOrigen = "192.168.1.10"
+  resultado = "exitoso"
+}
+
+object "__accesoAndres : Acceso__" as accesoAndres {
+  id = 2
+  idUsuario = 2
+  tipoAccion = "login"
+  fechaHora = "2026-10-18T20:05:00"
+  ipOrigen = "192.168.1.25"
+  resultado = "fallido"
+}
+
+object "__bitacoraRol : Bitacora__" as bitacoraRol {
+  id = 1
+  idUsuario = 1
+  tabla = "roles"
+  idRegistro = 2
+  accion = "CREACION"
+  detalle = "Rol recepcion creado con 2 permisos"
+  direccionIp = "192.168.1.10"
+  fechaHora = "2026-10-01T09:10:00"
+}
+
+' ------------------------------ Enlaces ------------------------------
+laura --> rolAdmin : idRol = 1
+andres --> rolRecepcion : idRol = 2
+
+rolAdmin -- pRolesCrear : rol_permiso
+rolAdmin -- pVentasAnular : rol_permiso
+rolRecepcion -- pIngresosValidar : rol_permiso
+rolRecepcion -- pReservasConfirmar : rol_permiso
+
+accesoLaura --> laura : idUsuario = 1
+accesoAndres --> andres : idUsuario = 2
+bitacoraRol --> laura : idUsuario = 1
+bitacoraRol ..> rolRecepcion : idRegistro = 2\n(tabla roles)
+
+' ------------------------------ Notas (RN) ---------------------------
+note right of rolRecepcion
+  Un rol debe tener al menos
+  un permiso activo
+  (ROL_SIN_PERMISOS).
+end note
+
+note bottom of laura
+  contrasenaHash es bcrypt;
+  nunca se expone en toJSON().
+end note
+
+note bottom of accesoAndres
+  Intento fallido: queda
+  registrado en accesos.
+end note
+
+@enduml
