@@ -12,31 +12,184 @@ reportes de desempeño.
 
 ## 1. Requisitos previos
 
-- **Node.js 18+** (probado con Node 24) — fetch nativo y `node --test`.
-- **MySQL 8** corriendo en `localhost:3306`.
-- Un cliente para la colección Postman (Postman o Newman).
+### Software que hay que instalar en el computador
 
-## 2. Puesta en marcha
+| Software | Versión | Cómo verificarlo (terminal) | Observación |
+|---|---|---|---|
+| **Node.js** | 18 o superior (probado con Node 24) | `node --version` y `npm --version` | **npm viene incluido con Node.js**: no se instala "npm" por separado. |
+| **MySQL Server** | 8 | `mysql --version` | Al instalar se define la clave del usuario `root`. Debe quedar corriendo en `localhost:3306`. |
+| **Git** (opcional) | cualquiera | `git --version` | Solo si quieres usar **Git Bash** como terminal. |
+| **Postman** (opcional) | cualquiera | — | Para importar la colección de pruebas (sección 8). |
+
+Comprobar que MySQL esté corriendo (**Terminal de Windows**, como
+administrador; el servicio suele llamarse `MySQL80`):
+
+```powershell
+net start MySQL80
+```
+
+### Terminales usadas en esta guía
+
+| Etiqueta de la guía | Cómo abrir | Características |
+|---|---|---|
+| **Terminal de Windows** | `Windows + X` → *Terminal* (PowerShell) o *Símbolo del sistema* (CMD) | Comandos de Windows: `cd`, `copy`, `dir` |
+| **Git Bash** | Menú inicio → *Git Bash* (se instala junto con Git) | Comandos estilo Linux: `cp`, `ls`, y la redirección `<` de archivos |
+
+> Los scripts de `npm` (`npm install`, `npm start`, `npm test`, `npm run
+> db:*`) funcionan **igual en las dos terminales**. La diferencia está en los
+> comandos de Windows/Linux y en la redirección `<` de los archivos `.sql`
+> (ver paso 2.5).
+
+### Dependencias npm del proyecto
+
+No hay que instalar paquetes npm a mano ni con `-g` (globales). Todas las
+librerías que usa la API (`express`, `mysql2`, `dotenv`, `cors`, `bcryptjs`,
+`jsonwebtoken`, `qrcode`) están declaradas en `package.json` y se instalan
+automáticamente en el paso 2.2 con `npm install`.
+
+## 2. Puesta en marcha (paso a paso)
+
+> **Antes que nada:** todos los comandos de `npm` se ejecutan **dentro de la
+> carpeta `discoteca-api`** (la que contiene `package.json`). Si te aparece
+> el error `ENOENT: ... package.json`, es que estás parado en la carpeta
+> equivocada.
+
+### 2.1 Entrar a la carpeta del proyecto
+
+**Terminal de Windows (PowerShell o CMD):**
+
+```powershell
+cd "C:\Users\TU_USUARIO\Desktop\TRABAJO-FINAL-SENA\Backend-proyecto discoteca\discoteca-api"
+dir
+```
+
+**Git Bash:**
 
 ```bash
-# 1. Dependencias
+cd "/c/Users/TU_USUARIO/Desktop/TRABAJO-FINAL-SENA/Backend-proyecto discoteca/discoteca-api"
+ls
+```
+
+En la lista deben aparecer `package.json`, `src`, `database` y
+`.env.example`.
+
+### 2.2 Instalar las dependencias del proyecto
+
+**Terminal de Windows o Git Bash (mismo comando):**
+
+```bash
 npm install
+```
 
-# 2. Entorno: copiar la plantilla y revisar los valores
+Esto lee `package.json` y crea la carpeta `node_modules/`. Solo se ejecuta
+una vez (o cuando cambian las dependencias).
+
+### 2.3 Crear el archivo de configuración `.env`
+
+**Terminal de Windows (PowerShell o CMD):**
+
+```powershell
+copy .env.example .env
+```
+
+**Git Bash:**
+
+```bash
 cp .env.example .env
+```
 
-# 3. Base de datos (crea tablas y usuario de aplicación de mínimo privilegio)
-npm run db:schema
-npm run db:user
+Si MySQL y el proyecto usan los valores por defecto, **no hace falta editar
+nada**; opcionalmente cambia `JWT_SECRETO` por un texto propio. Importante:
+el `.env` guarda el usuario de la **APLICACIÓN** (`discoteca_app`), nunca
+`root` ni el administrador creado en el paso 2.4.
 
-# 4. Datos de prueba (usuarios, roles, clientes, productos, eventos, etc.)
-npm run db:seed
+### 2.4 Crear la base de datos y un usuario administrador en MySQL
 
-# 5. Arrancar el servidor (puerto 3000 por defecto)
+1. Abrir una terminal y entrar a MySQL con `root` (la clave que definiste
+   al instalar MySQL):
+
+**Terminal de Windows o Git Bash (mismo comando):**
+
+```bash
+mysql -u root -p
+```
+
+2. Dentro de la consola de MySQL, crear la base de datos del proyecto y un
+   usuario con permisos de administrador:
+
+```sql
+-- Base de datos del proyecto
+CREATE DATABASE IF NOT EXISTS discoteca_api
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci;
+
+-- Usuario con permisos de ADMINISTRADOR.
+-- Los privilegios sobre *.* (globales) son necesarios para que pueda
+-- correr los scripts de la carpeta database/: crear la base, las tablas
+-- y el usuario de aplicación (CREATE USER / GRANT).
+CREATE USER IF NOT EXISTS 'discoteca_admin'@'localhost'
+  IDENTIFIED BY 'DiscotecaAdmin2026';
+
+GRANT ALL PRIVILEGES ON *.*
+  TO 'discoteca_admin'@'localhost'
+  WITH GRANT OPTION;
+
+FLUSH PRIVILEGES;
+
+-- Verificación
+SHOW GRANTS FOR 'discoteca_admin'@'localhost';
+EXIT;
+```
+
+> Si prefieres, puedes saltarte este usuario y usar `root` directamente en
+> los pasos siguientes: `root` también tiene permisos de administrador.
+
+### 2.5 Cargar tablas, usuario de aplicación y datos de prueba
+
+Los archivos `.sql` están en la carpeta `database/`. **La redirección `<`
+NO funciona en PowerShell**, así que estos comandos se ejecutan en **Git
+Bash** (o en CMD si usas Windows):
+
+**Git Bash (o Terminal CMD):**
+
+```bash
+# 1) Crea las 26 tablas de la base discoteca_api
+mysql -u discoteca_admin -p < database/01_schema.sql
+
+# 2) Crea el usuario de mínimo privilegio que usa la API (discoteca_app)
+mysql -u discoteca_admin -p < database/02_usuario_app.sql
+
+# 3) Datos de prueba: roles, usuarios, clientes, productos, eventos, etc.
+mysql -u discoteca_admin -p discoteca_api < database/03_seed.sql
+```
+
+Cada comando pide la contraseña del administrador
+(`DiscotecaAdmin2026`).
+
+**Alternativa con `root` desde cualquier terminal** (los scripts de npm ya
+traen los comandos anteriores escritos):
+
+```bash
+npm run db:schema   # mysql -u root -p < database/01_schema.sql
+npm run db:user     # mysql -u root -p < database/02_usuario_app.sql
+npm run db:seed     # mysql -u root -p discoteca_api < database/03_seed.sql
+```
+
+> Si la terminal responde `mysql no se reconoce`, añade la carpeta `bin` de
+> MySQL al **PATH** o escribe la ruta completa del ejecutable, por ejemplo:
+> `"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u discoteca_admin -p < database/01_schema.sql`
+
+### 2.6 Arrancar el servidor
+
+**Terminal de Windows o Git Bash (mismo comando):**
+
+```bash
 npm start
 ```
 
-Salud del servidor: `GET http://localhost:3000/api/salud`.
+(O `npm run dev` para que el servidor se reinicie solo al guardar cambios.)
+
+Salud del servidor: `GET http://localhost:3000/api/salud`
+(abrirla en el navegador o en Postman).
 
 ### Credenciales del seed
 

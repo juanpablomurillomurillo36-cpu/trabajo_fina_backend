@@ -1,7 +1,7 @@
 {
   "name": "discoteca-api",
   "version": "1.0.0",
-  "description": "API REST para gestionar el control de acceso, inventario, reservas, eventos y ventas de una discoteca. Proyecto formativo SENA - Ficha 3489088.",
+  "description": "API REST para gestionar el control de acceso, inventario, reservas, eventos y ventas de una discoteca.",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

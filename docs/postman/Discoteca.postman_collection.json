@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "discoteca-api-evidencia2",
     "name": "Discoteca - API REST",
-    "description": "Coleccion de pruebas de la API de la discoteca (Evidencia 2, criterio C9).\n\nCOMO USARLA:\n1. Levantar el servidor: node src/index.js (puerto 3000).\n2. Regenerar la base con 01_schema.sql + 02_alter.sql + 03_seed.sql.\n3. Ejecutar la coleccion COMPLETA y en orden (01 -> 06). El login guarda el token en la variable {{token}}.\n4. Credenciales de la semilla: admin@correo.mx / Admin1234.\n\nRE-EJECUTABLE: cada ciclo crea registros con el sufijo unico {{sufijo}} (se genera en el login) y los borra al finalizar, por lo que la coccion puede correr varias veces sin chocar con datos unicos (documento, email, nit, nombre).",
+    "description": "Coleccion de pruebas de la API de la discoteca (\n\nCOMO USARLA:\n1. Levantar el servidor: node src/index.js (puerto 3000).\n2. Regenerar la base con 01_schema.sql + 02_alter.sql + 03_seed.sql.\n3. Ejecutar la coleccion COMPLETA y en orden (01 -> 06). El login guarda el token en la variable {{token}}.\n4. Credenciales de la semilla: admin@correo.mx / Admin1234.\n\nRE-EJECUTABLE: cada ciclo crea registros con el sufijo unico {{sufijo}} (se genera en el login) y los borra al finalizar, por lo que la coccion puede correr varias veces sin chocar con datos unicos (documento, email, nit, nombre).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
