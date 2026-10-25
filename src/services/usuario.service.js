@@ -1,410 +1,434 @@
 /**
  * src/services/usuario.service.js
  * ---------------------------------------------------------------------
- * CAPA DE SERVICIO de la entidad Usuario.
+ * CAPA DE SERVICE de la entidad Usuario.
  *
- * REGLAS DE NEGOCIO QUE RESUELVE
- *   1. Correo UNICO                -> 409 CORREO_DUPLICADO.
- *   2. El rol indicado DEBE existir -> 400 (evita el error crudo de la FK).
- *   3. La contrasena NUNCA se      -> se hashea con bcrypt ANTES de
- *      guarda en claro                 persistir; el modelo solo recibe
- *                                      el hash.
- *   4. Fortaleza de la contrasena  -> 400 CONTRASENA_DEBIL (8+ chars,
- *      letra y numero) del ColectorErrores.
- *   5. No se borra una cuenta con  -> 409 (accesos, bitacora e
- *      referencias vivas               ingresos la referencian).
- *   6. Cuenta inactiva no entra    -> se decide en la fase 20 (login).
+ * REGLA #1 DE ESTE ARCHIVO: la contrasena NUNCA viaja en claro.
+ *   - Se RECIBE en claro desde el cliente (HTTPS se encarga del
+ *     transporte).
+ *   - Se GUARDA hasheada con bcrypt (utils/cifrado.js).
+ *   - Se NUNCA se lee en los SELECT de listado ni se expone en
+ *     toJSON(); por eso las consultas de abajo NO piden la columna
+ *     contrasena_hash: si no se pide, no puede filtrarse por accidente.
  *
- * POR QUE EL HASH SE HACE AQUI Y NO EN EL MODELO?
- * Porque hashear es ASINCRONO (bcrypt tarda ~100ms a proposito) y un
- * constructor sincrono no puede esperar. Ademas, asi el service es el
- * UNICO punto donde la contrasena en claro existe, y desaparece en la
- * siguiente linea. Es el principio de menor privilegio aplicado a
- * datos: el repository jamas ve una clave en claro.
+ * TABLA `usuarios`
+ * ---------------------------------------------------------------------
+ *   id_usuario      INT PK AUTO_INCREMENT
+ *   id_rol          INT NOT NULL  -> FK roles.id_rol
+ *   nombre          VARCHAR(80) NOT NULL
+ *   apellido        VARCHAR(80) NOT NULL
+ *   email           VARCHAR(120) NOT NULL UNIQUE
+ *   contrasena_hash VARCHAR(255) NOT NULL
+ *   telefono        VARCHAR(20) NULL
+ *   estado          ENUM('activo','inactivo') DEFAULT 'activo'
+ *   fecha_creacion  DATETIME DEFAULT CURRENT_TIMESTAMP
  */
 
+const db = require('../config/database');
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
-const formato = require('../utils/formato');
-const cifrado = require('../utils/cifrado');
-const { ColectorErrores } = require('../utils/validadores');
-const { LIMITES, ESTADO } = require('../utils/constants');
 const { Usuario } = require('../models');
-const usuarioRepository = require('../repositories/UsuarioRepository');
+const { ColectorErrores } = require('../utils/validadores');
+const { ESTADO, LIMITES } = require('../utils/constants');
+const cifrado = require('../utils/cifrado');
+const {
+  limpiarTexto,
+  soloCamposPermitidos,
+  normalizarPaginacion
+} = require('../utils/formato');
 
-// Lista blanca de campos admisibles en el cuerpo de la peticion.
-const CAMPOS_PERMITIDOS = [
-  'nombre',
-  'apellido',
-  'email',
-  'telefono',
-  'idRol',
-  'estado',
-  'contrasena'
-];
-
-const ESTADOS_PERMITIDOS = [ESTADO.ACTIVO, ESTADO.INACTIVO];
-
-// usuarios.telefono: VARCHAR(20) NULL.
-const MAXIMO_TELEFONO = 20;
+/**
+ * Columnas del usuario. OJO: NO esta `contrasena_hash` a proposito.
+ * Ninguna lectura de esta capa necesita el hash, y no pedirlo es la
+ * forma mas barata de garantizar que no se filtre.
+ */
+const COLUMNAS_USUARIO = `
+  u.id_usuario, u.id_rol, u.nombre, u.apellido, u.email,
+  u.telefono, u.estado, u.fecha_creacion, r.nombre_rol`;
 
 class UsuarioService {
+  #camposPermitidos = ['nombre', 'apellido', 'email', 'telefono', 'idRol', 'estado', 'contrasena'];
+
+  // =================================================================
+  // LISTADO
+  // ================================================================
+
   /**
-   * LISTAR usuarios con filtros y paginacion.
+   * Lista usuarios con filtros, paginacion y el nombre del rol.
    *
-   * Filtros admitidos: ?estado=&busqueda=&idRol=&pagina=&limite=
+   * Filtros: ?estado=activo & busqueda=ana & idRol=5 & pagina=1 & limite=20
    *
-   * @param {object} filtros  req.query
-   * @returns {Promise<{usuarios: Usuario[], total, pagina, limite}>}
+   * INNER JOIN con roles: como id_rol es NOT NULL y tiene llave
+   * foranea, no puede haber usuarios "sin rol"; por eso el join
+   * interno no pierde ninguna fila.
+   *
+   * @param {object} filtros
+   * @returns {Promise<{usuarios: Usuario[], total: number, pagina: number, limite: number}>}
    */
   async listar(filtros = {}) {
-    const pagina = Math.max(1, formato.aEnteroONulo(filtros.pagina) ?? LIMITES.PAGINA_DEFECTO);
-    const limite = Math.min(
-      Math.max(1, formato.aEnteroONulo(filtros.limite) ?? LIMITES.LIMITE_DEFECTO),
-      LIMITES.LIMITE_MAXIMO
+    const { pagina, limite, desplazamiento } = normalizarPaginacion(
+      filtros,
+      LIMITES.LIMITE_DEFECTO,
+      LIMITES.LIMITE_PAGINA
     );
 
-    const estado = this.#normalizarEstadoConsulta(filtros.estado);
-    const busqueda = formato.limpiarTexto(filtros.busqueda ?? filtros.buscar);
-    const idRol = formato.aEnteroONulo(filtros.idRol);
+    const condiciones = [];
+    const parametros = [];
 
-    const { usuarios, total } = await usuarioRepository.listar({
-      estado,
-      busqueda,
-      idRol,
-      pagina,
-      limite
-    });
+    if (filtros.estado) {
+      const estado = limpiarTexto(String(filtros.estado));
 
-    return { usuarios, total, pagina, limite };
-  }
-
-  /**
-   * OBTENER un usuario por id.
-   *
-   * @param {number} id
-   * @returns {Promise<Usuario>}
-   * @throws {AppError} 404
-   */
-  async obtenerPorId(id) {
-    const usuario = await usuarioRepository.obtenerPorId(id);
-
-    if (usuario === null) {
-      throw AppError.noEncontrado(MENSAJES.NEGOCIO.NO_EXISTE('usuario'));
+      if (Object.values(ESTADO).includes(estado)) {
+        condiciones.push('u.estado = ?');
+        parametros.push(estado);
+      }
     }
 
-    return usuario;
-  }
+    // Filtro por rol: si manda algo que no sea entero, se ignora en
+    // vez de romper la consulta con un 400 por algo tan blando.
+    const idRol = Number.parseInt(filtros.idRol, 10);
 
-  /**
-   * CREAR una cuenta de usuario.
-   *
-   * @param {object} datosCrudos  req.body
-   * @returns {Promise<Usuario>} La cuenta creada, sin contrasena ni hash.
-   */
-  async crear(datosCrudos) {
-    const datos = this.#normalizar(datosCrudos);
-
-    this.#validarCreacion(datos);
-
-    // Reglas de negocio que necesitan consultar la base:
-    //   - correo unico (409)
-    //   - rol existente (400)
-    await this.#verificarCorreoUnico(datos.email);
-    await this.#verificarRolExistente(datos.idRol);
-
-    // PASO CRITICO: aqui la contrasena en claro deja de existir.
-    const contrasenaHash = await cifrado.hashearPassword(datos.contrasena);
-
-    const usuario = Usuario.desdeJSON({ ...datos, contrasenaHash });
-
-    usuario.id = await usuarioRepository.crear(usuario);
-
-    return usuario;
-  }
-
-  /**
-   * ACTUALIZAR un usuario (parcial).
-   *
-   * La contrasena es opcional: si NO viene, se conserva la actual
-   * (el repository no la toca). Si viene, se valida y se hashea.
-   *
-   * @param {number} id
-   * @param {object} datosCrudos
-   * @returns {Promise<Usuario>}
-   */
-  async actualizar(id, datosCrudos) {
-    const usuario = await this.obtenerPorId(id);
-
-    const datos = this.#normalizar(datosCrudos);
-    this.#validarActualizacion(datos);
-
-    // Solo se re-validan las relaciones/reglas de los campos que
-    // llegaron: editar el telefono no deberia exigir que el rol siga
-    // existiendo.
-    if (Object.hasOwn(datos, 'email')) {
-      await this.#verificarCorreoUnico(datos.email, id);
-      usuario.email = datos.email;
+    if (Number.isInteger(idRol) && idRol > 0) {
+      condiciones.push('u.id_rol = ?');
+      parametros.push(idRol);
     }
 
-    if (Object.hasOwn(datos, 'idRol')) {
-      await this.#verificarRolExistente(datos.idRol);
-      usuario.idRol = datos.idRol;
+    if (filtros.busqueda && limpiarTexto(String(filtros.busqueda)) !== '') {
+      const texto = limpiarTexto(String(filtros.busqueda));
+      const patron = `%${texto.replace(/[%_]/g, '\\$&')}%`;
+
+      condiciones.push('(u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ?)');
+      parametros.push(patron, patron, patron);
     }
 
-    if (Object.hasOwn(datos, 'nombre')) usuario.nombre = datos.nombre;
-    if (Object.hasOwn(datos, 'apellido')) usuario.apellido = datos.apellido;
-    if (Object.hasOwn(datos, 'telefono')) usuario.telefono = datos.telefono;
-    if (Object.hasOwn(datos, 'estado')) usuario.estado = datos.estado;
+    const donde = condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : '';
 
-    await usuarioRepository.actualizar(id, usuario);
+    const filaTotal = await db.obtenerUno(
+      `SELECT COUNT(*) AS total
+         FROM usuarios u
+         INNER JOIN roles r ON r.id_rol = u.id_rol
+         ${donde}`,
+      parametros
+    );
+    const total = Number(filaTotal?.total ?? 0);
 
-    // La contrasena se procesa aparte porque requiere OTRA consulta
-    // (UPDATE exclusivo) y otro flujo (hashear).
-    if (Object.hasOwn(datos, 'contrasena')) {
-      const hash = await cifrado.hashearPassword(datos.contrasena);
-      await usuarioRepository.cambiarContrasena(id, hash);
-      usuario.contrasenaHash = hash;
-    }
-
-    return usuario;
-  }
-
-  /**
-   * CAMBIAR el estado de la cuenta.
-   *
-   * @param {number} id
-   * @param {object} datosCrudos  { estado }
-   * @returns {Promise<Usuario>}
-   */
-  async cambiarEstado(id, datosCrudos) {
-    const usuario = await this.obtenerPorId(id);
-
-    const errores = new ColectorErrores();
-    errores.exigirValorDeLista('estado', datosCrudos?.estado, ESTADOS_PERMITIDOS);
-    errores.lanzarSiHay('No se pudo cambiar el estado del usuario.');
-
-    await usuarioRepository.cambiarEstado(id, datosCrudos.estado);
-
-    usuario.estado = datosCrudos.estado;
-
-    return usuario;
-  }
-
-  /**
-   * ELIMINAR una cuenta.
-   *
-   * @param {number} id
-   * @returns {Promise<object>} Resumen de lo borrado.
-   * @throws {AppError} 404 si no existe, 409 si tiene historial.
-   */
-  async eliminar(id) {
-    const usuario = await this.obtenerPorId(id);
-
-    const referencias = await usuarioRepository.contarReferencias(id);
-
-    if (referencias.total > 0) {
-      throw AppError.conflicto(
-        MENSAJES.NEGOCIO.EN_USO('usuario', 'accesos, bitacora e ingresos'),
-        [
-          {
-            campo: 'referencias',
-            mensaje:
-              `La cuenta tiene ${referencias.accesos} acceso(s), ${referencias.bitacora} ` +
-              `registro(s) de bitacora y ${referencias.ingresos} ingreso(s) validados. ` +
-              'Desactiva la cuenta en su lugar: conserva el historial sin perder trazabilidad.'
-          }
-        ]
-      );
-    }
-
-    await usuarioRepository.eliminar(id);
+    const filas = await db.ejecutar(
+      `SELECT ${COLUMNAS_USUARIO}
+         FROM usuarios u
+         INNER JOIN roles r ON r.id_rol = u.id_rol
+         ${donde}
+        ORDER BY u.apellido, u.nombre
+        LIMIT ${limite} OFFSET ${desplazamiento}`,
+      parametros
+    );
 
     return {
-      id: usuario.id,
-      email: usuario.email,
-      nombreCompleto: usuario.nombreCompleto,
-      referencias
+      usuarios: filas.map((fila) => Usuario.desdeFila(fila)),
+      total,
+      pagina,
+      limite
     };
   }
 
-  // ==================================================================
-  // PRIVADAS
-  // ==================================================================
+  // =================================================================
+  // DETALLE
+  // ================================================================
 
   /**
-   * Filtra el cuerpo contra la lista blanca.
+   * Busca un usuario por id, con el nombre de su rol.
    *
-   * @param {object} datosCrudos
-   * @returns {object}
+   * @param {number} id
+   * @returns {Promise<Usuario>}
+   * @throws {AppError} 404 si no existe.
    */
-  #normalizar(datosCrudos) {
-    const filtrados = formato.soloCamposPermitidos(datosCrudos, CAMPOS_PERMITIDOS);
-    const limpios = {};
+  async obtenerPorId(id) {
+    const fila = await db.obtenerUno(
+      `SELECT ${COLUMNAS_USUARIO}
+         FROM usuarios u
+         INNER JOIN roles r ON r.id_rol = u.id_rol
+        WHERE u.id_usuario = ?`,
+      [id]
+    );
 
-    // Los nombres pasan a "Titulo Propio": "ANA maria" -> "Ana Maria".
-    if (Object.hasOwn(filtrados, 'nombre')) {
-      limpios.nombre = formato.aTituloPropio(filtrados.nombre);
+    if (fila === null) {
+      throw AppError.noEncontrado(MENSAJES.NEGOCIO.USUARIO_NO_EXISTE(id));
     }
 
-    if (Object.hasOwn(filtrados, 'apellido')) {
-      limpios.apellido = formato.aTituloPropio(filtrados.apellido);
-    }
-
-    // El correo se limpia aqui y el modelo ademas lo pasa a minusculas.
-    if (Object.hasOwn(filtrados, 'email')) {
-      limpios.email = formato.limpiarTexto(filtrados.email);
-    }
-
-    if (Object.hasOwn(filtrados, 'telefono')) {
-      limpios.telefono = formato.limpiarTexto(filtrados.telefono);
-    }
-
-    if (Object.hasOwn(filtrados, 'idRol')) {
-      // Si era un texto no numerico se conserva tal cual, para que
-      // exigirEntero reporte el error real en vez de "obligatorio".
-      limpios.idRol = formato.aEnteroONulo(filtrados.idRol) ?? filtrados.idRol;
-    }
-
-    if (Object.hasOwn(filtrados, 'estado')) {
-      limpios.estado = filtrados.estado;
-    }
-
-    // La contrasena se recorta pero NUNCA se transforma mas alla de
-    // eso: se hashea tal cual llega.
-    if (Object.hasOwn(filtrados, 'contrasena')) {
-      limpios.contrasena =
-        typeof filtrados.contrasena === 'string' ? filtrados.contrasena : filtrados.contrasena;
-    }
-
-    return limpios;
+    return Usuario.desdeFila(fila);
   }
 
+  // =================================================================
+  // CREACION
+  // ================================================================
+
   /**
-   * Valida la CREACION: todos los campos obligatorios de la tabla.
+   * Crea un usuario.
    *
-   * @param {object} datos
-   * @throws {AppError} 400 con TODOS los errores juntos.
+   * Orden de las validaciones: primero lo BARATO (formato) y despues
+   * lo que cuesta una consulta (unicidad, existencia del rol). Asi,
+   * si el formato esta mal no se gasta un viaje a la base.
+   *
+   * @param {object} datos  req.body.
+   * @returns {Promise<Usuario>}
+   * @throws {AppError} 400 datos invalidos o rol inexistente,
+   *                    409 correo ya registrado.
    */
-  #validarCreacion(datos) {
+  async crear(datos) {
+    const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
+
+    const datosNormalizados = this.#validar(entrada, { esCreacion: true });
+
+    await this.#asegurarCorreoUnico(datosNormalizados.email, null);
+    await this.#asegurarRolExistente(datosNormalizados.idRol);
+
+    // hashearPassword es async (bcrypt trabaja fuera del hilo principal).
+    datosNormalizados.contrasenaHash = await cifrado.hashearPassword(
+      datosNormalizados.contrasena
+    );
+
+    const resultado = await db.ejecutar(
+      `INSERT INTO usuarios
+         (id_rol, nombre, apellido, email, contrasena_hash, telefono, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        datosNormalizados.idRol,
+        datosNormalizados.nombre,
+        datosNormalizados.apellido,
+        datosNormalizados.email,
+        datosNormalizados.contrasenaHash,
+        datosNormalizados.telefono,
+        datosNormalizados.estado
+      ]
+    );
+
+    return this.obtenerPorId(resultado.insertId);
+  }
+
+  // =================================================================
+  // ACTUALIZACION
+  // ================================================================
+
+  /**
+   * Actualizacion PARCIAL del usuario.
+   *
+   * Caso real de la coleccion de Postman: el PUT manda UNICAMENTE
+   * {"telefono": "3001112233"}. Todo lo demas tiene que quedar igual;
+   * si se hiciera un UPDATE con solo ese campo y los demas llegaran
+   * vacios, se borrarian nombre y apellido.
+   *
+   * @param {number} id
+   * @param {object} datos
+   * @returns {Promise<Usuario>}
+   */
+  async actualizar(id, datos) {
+    const existente = await this.obtenerPorId(id);
+
+    const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
+
+    if (Object.keys(entrada).length === 0) {
+      throw AppError.cuerpoInvalido(
+        'La peticion no incluye ningun campo actualizable. Se admiten: ' +
+          this.#camposPermitidos.join(', ')
+      );
+    }
+
+    const esCreacion = false;
+    const datosNormalizados = this.#validar(
+      {
+        nombre: entrada.nombre ?? existente.nombre,
+        apellido: entrada.apellido ?? existente.apellido,
+        email: entrada.email ?? existente.email,
+        telefono: entrada.telefono ?? existente.telefono,
+        idRol: entrada.idRol ?? existente.idRol,
+        estado: entrada.estado ?? existente.estado,
+        // La contrasena solo se valida si viene: un PUT que no la
+        // trae no debe exigir la regla de 8 caracteres.
+        contrasena: entrada.contrasena
+      },
+      { esCreacion, traeContrasena: entrada.contrasena !== undefined }
+    );
+
+    if (entrada.email !== undefined && datosNormalizados.email !== existente.email) {
+      await this.#asegurarCorreoUnico(datosNormalizados.email, id);
+    }
+
+    if (entrada.idRol !== undefined) {
+      await this.#asegurarRolExistente(datosNormalizados.idRol);
+    }
+
+    await db.ejecutar(
+      `UPDATE usuarios
+          SET id_rol = ?, nombre = ?, apellido = ?, email = ?, telefono = ?, estado = ?
+        WHERE id_usuario = ?`,
+      [
+        datosNormalizados.idRol,
+        datosNormalizados.nombre,
+        datosNormalizados.apellido,
+        datosNormalizados.email,
+        datosNormalizados.telefono,
+        datosNormalizados.estado,
+        id
+      ]
+    );
+
+    // La contrasena se UPDATEA aparte, con su propio hash, para no
+    // arrastrar la columna contrasena_hash en cada PUT normal.
+    if (datosNormalizados.contrasena) {
+      const hash = await cifrado.hashearPassword(datosNormalizados.contrasena);
+
+      await db.ejecutar('UPDATE usuarios SET contrasena_hash = ? WHERE id_usuario = ?', [
+        hash,
+        id
+      ]);
+    }
+
+    return this.obtenerPorId(id);
+  }
+
+  // =================================================================
+  // CAMBIO DE ESTADO (PATCH)
+  // ================================================================
+
+  /**
+   * Baja o subida logica del usuario (no se borra la cuenta).
+   *
+   * @param {number} id
+   * @param {string} estado
+   * @returns {Promise<Usuario>}
+   */
+  async cambiarEstado(id, estado) {
+    await this.obtenerPorId(id);
+
+    const errores = new ColectorErrores();
+    errores.exigirValorDeLista('estado', estado, Object.values(ESTADO));
+    errores.lanzarSiHayErrores();
+
+    await db.ejecutar('UPDATE usuarios SET estado = ? WHERE id_usuario = ?', [estado, id]);
+
+    return this.obtenerPorId(id);
+  }
+
+  // =================================================================
+  // ELIMINACION
+  // ================================================================
+
+  /**
+   * Elimina un usuario.
+   *
+   * El borrado puede fallar con 409 si el usuario tiene historial en
+   * tablas que SÍ protegen su llave foranea (accesos, bitacora,
+   * ingresos). En ese caso MySQL devuelve ER_ROW_IS_REFERENCED y el
+   * middleware lo traduce a 409 con un mensaje claro.
+   *
+   * @param {number} id
+   * @returns {Promise<object>}
+   */
+  async eliminar(id) {
+    const existente = await this.obtenerPorId(id);
+
+    await db.ejecutar('DELETE FROM usuarios WHERE id_usuario = ?', [id]);
+
+    return {
+      idEliminado: existente.id,
+      email: existente.email,
+      mensaje: 'Usuario eliminado'
+    };
+  }
+
+  // =================================================================
+  // METODOS PRIVADOS DE APOYO
+  // ================================================================
+
+  /**
+   * Valida y normaliza todos los campos de un usuario.
+   *
+   * Devuelve un objeto plano listo para el SQL (no un Usuario): aqui
+   * conviven textos normalizados, idRol ya convertido y, si vino,
+   * la contrasena en CLARO (que despues se hashea; jamas se guarda).
+   *
+   * @param {object} entrada
+   * @param {object} opciones
+   * @param {boolean} opciones.esCreacion      La contrasena es obligatoria.
+   * @param {boolean} opciones.traeContrasena  El PUT trajo contrasena.
+   * @returns {object}
+   * @throws {AppError} 400 con el detalle campo a campo.
+   */
+  #validar(entrada, { esCreacion = false, traeContrasena = false } = {}) {
     const errores = new ColectorErrores();
 
-    // Columnas NOT NULL de `usuarios`.
-    errores.exigirTexto('nombre', datos.nombre, { maximo: LIMITES.VARCHAR_MEDIO });
-    errores.exigirTexto('apellido', datos.apellido, { maximo: LIMITES.VARCHAR_MEDIO });
-    errores.exigirCorreo('email', datos.email, { maximo: LIMITES.VARCHAR_LARGO });
-    errores.exigirContrasena('contrasena', datos.contrasena);
-    errores.exigirEntero('idRol', datos.idRol, { minimo: 1 });
+    errores.exigirTexto('nombre', entrada.nombre, { maximo: LIMITES.NOMBRE_USUARIO });
+    errores.exigirTexto('apellido', entrada.apellido, { maximo: LIMITES.NOMBRE_USUARIO });
+    errores.exigirCorreo('email', entrada.email);
 
-    // Columnas opcionales.
-    errores.exigirTexto('telefono', datos.telefono, {
-      requerido: false,
-      maximo: MAXIMO_TELEFONO
-    });
-    errores.exigirValorDeLista('estado', datos.estado, ESTADOS_PERMITIDOS, {
+    errores.exigirTexto('telefono', entrada.telefono, {
+      maximo: LIMITES.TELEFONO,
       requerido: false
     });
 
-    errores.lanzarSiHay('No se pudo crear el usuario porque hay datos invalidos.');
+    errores.exigirEntero('idRol', entrada.idRol, { minimo: 1 });
+
+    if (entrada.estado !== undefined && entrada.estado !== null && entrada.estado !== '') {
+      errores.exigirValorDeLista('estado', entrada.estado, Object.values(ESTADO));
+    }
+
+    const exigeContrasena = esCreacion || traeContrasena;
+
+    if (exigeContrasena) {
+      errores.exigirContrasena('contrasena', entrada.contrasena, esCreacion);
+    }
+
+    errores.lanzarSiHayErrores();
+
+    return {
+      nombre: limpiarTexto(entrada.nombre),
+      apellido: limpiarTexto(entrada.apellido),
+      email: limpiarTexto(entrada.email).toLowerCase(),
+      telefono: entrada.telefono === undefined || entrada.telefono === null
+        ? null
+        : limpiarTexto(entrada.telefono),
+      idRol: Number(entrada.idRol),
+      estado: entrada.estado || ESTADO.ACTIVO,
+      contrasena: exigeContrasena ? entrada.contrasena : null
+    };
   }
 
   /**
-   * Valida la ACTUALIZACION: todos los campos opcionales.
+   * Comprueba que el correo no este tomado.
    *
-   * @param {object} datos
-   * @throws {AppError} 400
+   * @param {string} email
+   * @param {number|null} idExcluido  El propio id en un PUT.
+   * @throws {AppError} 409 si ya existe.
    */
-  #validarActualizacion(datos) {
-    if (formato.estaVacio(datos)) {
-      throw AppError.validacion('Debes enviar al menos un campo valido para actualizar.', [
-        { campo: 'cuerpo', mensaje: `Campos admitidos: ${CAMPOS_PERMITIDOS.join(', ')}.` }
-      ]);
-    }
+  async #asegurarCorreoUnico(email, idExcluido) {
+    const fila = await db.obtenerUno(
+      'SELECT id_usuario FROM usuarios WHERE email = ? AND id_usuario <> ?',
+      [email, idExcluido ?? -1]
+    );
 
-    const errores = new ColectorErrores();
-
-    if (Object.hasOwn(datos, 'nombre')) {
-      errores.exigirTexto('nombre', datos.nombre, { maximo: LIMITES.VARCHAR_MEDIO });
-    }
-    if (Object.hasOwn(datos, 'apellido')) {
-      errores.exigirTexto('apellido', datos.apellido, { maximo: LIMITES.VARCHAR_MEDIO });
-    }
-    if (Object.hasOwn(datos, 'email')) {
-      errores.exigirCorreo('email', datos.email, { maximo: LIMITES.VARCHAR_LARGO });
-    }
-    if (Object.hasOwn(datos, 'contrasena')) {
-      errores.exigirContrasena('contrasena', datos.contrasena);
-    }
-    if (Object.hasOwn(datos, 'idRol')) {
-      errores.exigirEntero('idRol', datos.idRol, { minimo: 1 });
-    }
-    if (Object.hasOwn(datos, 'telefono')) {
-      errores.exigirTexto('telefono', datos.telefono, {
-        requerido: false,
-        maximo: MAXIMO_TELEFONO
-      });
-    }
-    if (Object.hasOwn(datos, 'estado')) {
-      errores.exigirValorDeLista('estado', datos.estado, ESTADOS_PERMITIDOS);
-    }
-
-    errores.lanzarSiHay('No se pudo actualizar el usuario porque hay datos invalidos.');
-  }
-
-  /**
-   * Unicidad del correo (409 si ya tiene cuenta).
-   *
-   * @param {string}      email
-   * @param {number|null} [idExcluido]
-   * @throws {AppError} 409
-   */
-  async #verificarCorreoUnico(email, idExcluido = null) {
-    const yaExiste = await usuarioRepository.existeEmail(email, idExcluido);
-
-    if (yaExiste) {
-      throw AppError.conflicto(MENSAJES.NEGOCIO.CORREO_DUPLICADO(email), [
-        { campo: 'email', mensaje: 'Ese correo ya tiene una cuenta.' }
-      ]);
+    if (fila !== null) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.CORREO_DUPLICADO(email));
     }
   }
 
   /**
-   * El rol referenciado debe existir (400 si no).
+   * Comprueba que el rol exista ANTES de escribir.
    *
-   * @param {*} idRol
-   * @throws {AppError} 400
+   * Es una consulta mas, pero evita dos cosas malas:
+   *   - un 400 generico de MySQL (ER_NO_REFERENCED_ROW), y
+   *   - dejar al usuario con un id_rol que no apunta a nada.
+   *
+   * @param {number} idRol
+   * @throws {AppError} 400 si el rol no existe.
    */
-  async #verificarRolExistente(idRol) {
-    const existe = await usuarioRepository.existeRol(idRol);
+  async #asegurarRolExistente(idRol) {
+    const fila = await db.obtenerUno('SELECT id_rol FROM roles WHERE id_rol = ?', [idRol]);
 
-    if (!existe) {
-      throw AppError.validacion('El rol indicado no existe.', [
-        { campo: 'idRol', mensaje: 'Selecciona un rol valido del sistema.' }
+    if (fila === null) {
+      throw AppError.validacion(MENSAJES.NEGOCIO.ROL_INVALIDO(idRol), [
+        { campo: 'idRol', mensaje: MENSAJES.NEGOCIO.ROL_INVALIDO(idRol) }
       ]);
     }
-  }
-
-  /**
-   * Valida el filtro ?estado= del listado.
-   *
-   * @param {*} valor
-   * @returns {string|null}
-   * @throws {AppError} 400
-   */
-  #normalizarEstadoConsulta(valor) {
-    const texto = formato.limpiarTexto(valor);
-
-    if (texto === null) return null;
-
-    if (!ESTADOS_PERMITIDOS.includes(texto)) {
-      throw AppError.validacion('El filtro de estado no es valido.', [
-        { campo: 'estado', mensaje: `Valores admitidos: ${ESTADOS_PERMITIDOS.join(', ')}.` }
-      ]);
-    }
-
-    return texto;
   }
 }
 
-// SINGLETON
 module.exports = new UsuarioService();

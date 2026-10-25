@@ -1,117 +1,122 @@
 /**
  * src/utils/respuesta.js
  * ---------------------------------------------------------------------
- * Traductor del CONTRATO de la API (criterio C4).
+ * Constructor del "sobre" (envelope) de respuesta de la API.
  *
- * TODA respuesta que sale de esta API tiene ESTE aspecto:
+ * POR QUE UN FORMATO UNICO DE RESPUESTA?
+ * Porque el frontend necesita un contrato ESTABLE. Si cada endpoint
+ * responde distinto, el codigo del cliente se llena de condicionales.
+ * Con este sobre, basta `if (respuesta.ok)`.
  *
- *   EXITO  : { ok: true,  mensaje: "...", datos: {...}, meta: {...} }
- *   ERROR  : { ok: false, error: { codigo, mensaje, detalles } }
+ * CONTRATO DE ESTA API
  *
- * POR QUE centralizarlo aqui?
- *   Si cada controlador armarara su propio JSON, tarde o temprano uno
- *   olvidaria el campo `ok` y el frontend se romperia. Aqui se arma
- *   UNA vez y todos llaman a estas funciones.
+ *   Exito (200 / 201):
+ *   {
+ *     "ok": true,
+ *     "mensaje": "Registro creado correctamente",
+ *     "datos": { ... }  o  [ ... ],
+ *     "meta": { "total": 5, "pagina": 1, "limite": 20 }   <- opcional
+ *   }
  *
- * Este modulo es una coleccion de funciones puras: solo recibe datos y
- * devuelve/arma respuestas. No toca la base de datos ni aplica reglas
- * de negocio.
+ *   Error (400, 404, 409, 500...):
+ *   {
+ *     "ok": false,
+ *     "error": {
+ *       "codigo": "NO_ENCONTRADO",
+ *       "mensaje": "No existe el rol con id 999",
+ *       "detalles": [ { "campo": "email", "mensaje": "..." } ]
+ *     }
+ *   }
+ *
+ * La bandera "ok" permite decidir sin interpretar el codigo HTTP.
  */
 
+const { HTTP } = require('./constants');
+
 /**
- * Responde 200 OK con el envoltorio de exito.
+ * Envia una respuesta exitosa.
  *
- * @param {object} res       Objeto response de Express
+ * @param {import('express').Response} res  Objeto response de Express.
  * @param {object} opciones
- * @param {string} opciones.mensaje  Mensaje legible para el cliente
- * @param {*}      opciones.datos    Payload (puede ser null)
- * @param {object} [opciones.meta]   Informacion de paginacion, etc.
- * @returns {object} res (para poder hacer `return respuesta.exito(...)`)
+ * @param {number} opciones.estado    Codigo HTTP (defecto 200).
+ * @param {string} opciones.mensaje   Texto para el usuario.
+ * @param {*}      opciones.datos     Carga util (objeto o arreglo).
+ * @param {object} opciones.meta      Metadatos opcionales (paginacion).
  */
-function exito(res, { mensaje, datos = null, meta = null }) {
+function exito(res, { estado = HTTP.OK, mensaje = '', datos = null, meta = null } = {}) {
   const cuerpo = { ok: true, mensaje };
 
-  // Solo agregamos `datos` y `meta` si vienen; asi el JSON queda limpio.
-  if (datos !== null && datos !== undefined) {
-    cuerpo.datos = datos;
-  }
+  // "datos" va SIEMPRE, aunque sea null, para que el frontend pueda
+  // hacer respuesta.datos.map(...) sin preguntar antes si existe.
+  cuerpo.datos = datos;
 
-  if (meta !== null && meta !== undefined) {
+  // "meta" solo aparece cuando tiene sentido (listados paginados).
+  if (meta !== null) {
     cuerpo.meta = meta;
   }
 
-  return res.status(200).json(cuerpo);
+  return res.status(estado).json(cuerpo);
 }
 
 /**
- * Responde 201 Created. Se usa cuando SE CREA un recurso nuevo.
- * El controlador debe poner antes la cabecera Location.
+ * Atajo para respuestas 201 Created (resultado de un POST).
  *
- * @param {object} res
- * @param {object} opciones  Igual que exito()
- * @returns {object} res
+ * Se usa 201 y no 200 porque 201 indica "un recurso nuevo fue creado".
+ * El estandar HTTP lo distingue expressamente y los clientes REST
+ * (como Postman) lo verifican con pm.response.to.have.status(201).
+ *
+ * @param {import('express').Response} res
+ * @param {object} opciones
  */
-function creado(res, { mensaje, datos = null, meta = null }) {
-  const cuerpo = { ok: true, mensaje };
+function creado(res, { mensaje = '', datos = null } = {}) {
+  return exito(res, { estado: HTTP.CREADO, mensaje, datos });
+}
 
-  if (datos !== null && datos !== undefined) {
-    cuerpo.datos = datos;
+/**
+ * Envia una respuesta de error ya formateada.
+ *
+ * Normalmente NO se llama directo: es el middleware manejadorErrores
+ * quien la usa. Se deja exportada por si una capa necesita responder
+ * un error sin lanzar una excepcion.
+ *
+ * @param {import('express').Response} res
+ * @param {object} opciones
+ */
+function error(res, { estado = HTTP.ERROR_INTERNO, codigo = 'INTERNO', mensaje = '', detalles = [] } = {}) {
+  const cuerpo = { ok: false, error: { codigo, mensaje } };
+
+  // "detalles" solo aparece si aporta informacion: no tiene sentido
+  // enviar "detalles": [] y obligar al cliente a comprobar longitud.
+  if (Array.isArray(detalles) && detalles.length > 0) {
+    cuerpo.error.detalles = detalles;
   }
 
-  if (meta !== null && meta !== undefined) {
-    cuerpo.meta = meta;
-  }
-
-  return res.status(201).json(cuerpo);
+  return res.status(estado).json(cuerpo);
 }
 
 /**
- * Responde un ERROR con el envoltorio { ok: false, error: {...} }.
+ * Construye el objeto "meta" de un listado paginado.
  *
- * OJO: si el error es interno (500) NUNCA se manda el mensaje real al
- * cliente, porque podria filtrar informacion interna (nombres de tablas,
- * rutas, etc.). Se manda un mensaje generico y el detalle queda en el
- * log del servidor.
- *
- * @param {object} res
- * @param {object} appError  Instancia de AppError
- * @returns {object} res
- */
-function fallo(res, appError) {
-  return res.status(appError.estado).json({
-    ok: false,
-    error: appError.aRespuestaError()
-  });
-}
-
-/**
- * Arma el bloque `meta` de paginacion.
- *
- *   { total, pagina, limite, devueltos, totalPaginas }
- *
- * @param {object} datos
- * @returns {object|null} null si no hay nada que informar
+ * @param {object} opciones
+ * @param {number} opciones.total     Total de registros que cumplen el filtro.
+ * @param {number} opciones.pagina    Pagina solicitada.
+ * @param {number} opciones.limite    Registros por pagina.
+ * @param {number} opciones.devueltos Registros en ESTA respuesta.
+ * @returns {object}
  */
 function construirMeta({ total, pagina, limite, devueltos }) {
-  if (total === undefined || total === null) {
-    return null;
-  }
-
-  // Math.ceil redondea hacia arriba: 45 items / 20 = 3 paginas.
-  const totalPaginas = Math.ceil(total / limite);
+  // Math.ceil redondea hacia arriba: 11 registros de 5 en 5 -> 3 paginas.
+  const totalPaginas = limite > 0 ? Math.ceil(total / limite) : 0;
 
   return {
     total,
     pagina,
     limite,
     devueltos,
-    totalPaginas
+    totalPaginas,
+    hayPaginaSiguiente: pagina < totalPaginas,
+    hayPaginaAnterior: pagina > 1
   };
 }
 
-module.exports = {
-  exito,
-  creado,
-  fallo,
-  construirMeta
-};
+module.exports = { exito, creado, error, construirMeta };

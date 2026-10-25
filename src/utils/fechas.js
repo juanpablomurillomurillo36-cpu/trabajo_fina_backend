@@ -1,50 +1,73 @@
 /**
  * src/utils/fechas.js
  * ---------------------------------------------------------------------
- * Funciones de fecha y hora.
+ * Normalizacion de fechas.
  *
- * FORMATOS QUE USA ESTE PROYECTO
+ * POR QUE EXISTE?
+ * Porque una fecha puede llegar desde TRES lugares distintos y cada
+ * uno la trae en un formato diferente:
  *
- *   ISO corto (fecha)      "2026-10-15"         -> datos del cliente
- *   ISO largo (fecha/hora) "2026-10-15T21:30:00"-> intervalos
- *   MySQL                  "2026-10-15 21:30:00"-> columnas DATETIME
+ *   1. MySQL  -> objeto Date (o cadena "2026-10-24 21:30:00")
+ *   2. JSON   -> texto ISO "2026-10-24T21:30:00.000Z"
+ *   3. HTML   -> texto "24/10/2026"
  *
- * TRES CUIDADOS IMPORTANTES
+ * Sin una capa unificada, cada service tendria que preguntar "esto es
+ * Date o string?" y el codigo se vuelve frágil.
  *
- *   1. Nunca comparar fechas con texto. "2026-10-5" < "2026-10-15"
- *      porque el 5 es menor que el 1... solo si se comparan IGUAL, y
- *      los meses sin cero a la izquierda rompen eso. Se comparan
- *      objetos Date o timestamps numericos.
- *
- *   2. `new Date("2026-10-15")` en JavaScript se interpreta en UTC,
- *      no en la hora local. Por eso parseamos y construimos a mano.
- *
- *   3. El pool de MySQL devuelve DATETIME como objeto Date con la
- *      zona horaria del servidor (timezone: 'local' en database.js).
+ * REGLA DE ESTA API: hacia ADENTRO (base de datos) se manda un Date de
+ * JavaScript; hacia AFUERA (respuesta JSON) siempre se devuelve texto
+ * ISO 8601, que es lo que entienden todos los clientes.
  */
 
 /**
- * Convierte cualquier valor a fecha ISO corta "AAAA-MM-DD".
+ * Convierte casi cualquier valor en un objeto Date.
  *
- * @param {*} valor  Puede ser texto "2026-10-15", objeto Date o null
- * @returns {string|null} null si no se pudo convertir
+ * @param {*} valor
+ * @returns {Date|null}  null si el valor no es interpretable.
  */
-function aFechaISO(valor) {
+function aDate(valor) {
   if (valor === null || valor === undefined || valor === '') return null;
 
-  // Si ya viene en el formato justo, no hay que tocar nada.
-  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor.trim())) {
-    return valor.trim();
+  if (valor instanceof Date) {
+    // isNaN protege contra `new Date('basura')`, que devuelve una
+    // fecha Invalida en lugar de null.
+    return Number.isNaN(valor.getTime()) ? null : valor;
   }
 
-  const fecha = valor instanceof Date ? valor : new Date(valor);
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
 
-  // getTime() devuelve NaN si la fecha no es valida.
-  if (Number.isNaN(fecha.getTime())) return null;
+/**
+ * Fecha y hora en texto ISO 8601 (con zona horaria).
+ *
+ * Es lo que se devuelve en las respuestas: "2026-10-24T21:30:00.000Z".
+ *
+ * @param {*} valor
+ * @returns {string|null}
+ */
+function aFechaHoraISO(valor) {
+  const fecha = aDate(valor);
+  return fecha === null ? null : fecha.toISOString();
+}
 
-  // getFullYear/getMonth/getDay son metodos en zona LOCAL, asi que la
-  // fecha que se imprime es la que el usuario espera ver.
-  const anio = fecha.getFullYear();
+/**
+ * Solo la fecha, en formato "YYYY-MM-DD".
+ *
+ * Se usa para columnas DATE (fecha de nacimiento, fecha del evento).
+ * toISOString() devuelve tambien la hora, por eso se recorta: si la
+ * hora es 23:00 en America/Bogota, "slice(0,10)" de un ISO en UTC
+ * podria devolver el dia SIGUIENTE. Por eso se arma desde la fecha
+ * LOCAL.
+ *
+ * @param {*} valor
+ * @returns {string|null}
+ */
+function aFechaISO(valor) {
+  const fecha = aDate(valor);
+  if (fecha === null) return null;
+
+  const anio = String(fecha.getFullYear()).padStart(4, '0');
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const dia = String(fecha.getDate()).padStart(2, '0');
 
@@ -52,128 +75,93 @@ function aFechaISO(valor) {
 }
 
 /**
- * Convierte a fecha y hora ISO "AAAA-MM-DDTHH:MM:SS".
- * Se usa para los intervalos de reservas y agendas.
+ * Convierte a un objeto Date apto para enviarlo a MySQL.
+ *
+ * Si llega un texto "YYYY-MM-DD" se interpreta en HORA LOCAL (y no en
+ * UTC): si no, el dia escrito por el usuario se corre un dia cuando
+ * la zona esta detras de UTC.
  *
  * @param {*} valor
- * @returns {string|null}
- */
-function aFechaHoraISO(valor) {
-  if (valor === null || valor === undefined || valor === '') return null;
-
-  const fecha = valor instanceof Date ? valor : new Date(valor);
-  if (Number.isNaN(fecha.getTime())) return null;
-
-  const anio = fecha.getFullYear();
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-  const dia = String(fecha.getDate()).padStart(2, '0');
-  const hora = String(fecha.getHours()).padStart(2, '0');
-  const minuto = String(fecha.getMinutes()).padStart(2, '0');
-  const segundo = String(fecha.getSeconds()).padStart(2, '0');
-
-  return `${anio}-${mes}-${dia}T${hora}:${minuto}:${segundo}`;
-}
-
-/**
- * Convierte al formato que espera MySQL en una columna DATETIME:
- *   "2026-10-15 21:30:00"
- *
- * @param {*} valor
- * @returns {string|null}
+ * @returns {Date|null}
  */
 function aFechaMySQL(valor) {
-  const iso = aFechaHoraISO(valor);
-  if (iso === null) return null;
+  if (typeof valor === 'string') {
+    const coincidencia = /^(\d{4})-(\d{2})-(\d{2})/.exec(valor.trim());
 
-  return iso.replace('T', ' ');
+    if (coincidencia) {
+      const [, anio, mes, dia] = coincidencia;
+      return new Date(Number(anio), Number(mes) - 1, Number(dia));
+    }
+  }
+
+  return aDate(valor);
 }
 
 /**
- * La fecha/hora recibida es posterior a la actual?
- *
- * @param {*} valor
- * @returns {boolean} false si no se pudo interpretar
- */
-function esFutura(valor) {
-  const fecha = valor instanceof Date ? valor : new Date(valor);
-  if (Number.isNaN(fecha.getTime())) return false;
-
-  return fecha.getTime() > Date.now();
-}
-
-/**
- * La fecha recibida es anterior a la actual?
- * Sirve para rechazar reservas o eventos en el pasado.
+ * true si la fecha recibida es ANTES de "ahora".
+ * Se usa para exigir, por ejemplo, fechas de nacimiento pasadas.
  *
  * @param {*} valor
  * @returns {boolean}
  */
-function esPasada(valor) {
-  const fecha = valor instanceof Date ? valor : new Date(valor);
-  if (Number.isNaN(fecha.getTime())) return false;
-
-  return fecha.getTime() < Date.now();
+function esFechaPasada(valor) {
+  const fecha = aDate(valor);
+  return fecha !== null && fecha.getTime() < Date.now();
 }
 
 /**
- * Devuelve la fecha y hora en formato MySQL.
- * Se usa en la bitacora y en registros con DEFAULT CURRENT_TIMESTAMP.
+ * true si la fecha recibida es DESPUES de "ahora".
  *
- * @param {Date} [fecha=new Date()]  Opcional: para fechas futuras
- *   (ej. "ahora + 15 min" como vencimiento de un codigo).
- * @returns {string} "2026-10-15 21:30:00"
+ * @param {*} valor
+ * @returns {boolean}
  */
-function ahoraEnMySQL(fecha = new Date()) {
-  return aFechaMySQL(fecha);
+function esFechaFutura(valor) {
+  const fecha = aDate(valor);
+  return fecha !== null && fecha.getTime() > Date.now();
 }
 
 /**
- * ===================================================================
- * DETECTOR DE SOLAPE DE HORARIOS
- * ===================================================================
+ * Edad cumplida en años a partir de una fecha de nacimiento.
+ * Devuelve null si la fecha no es interpretable.
  *
- * RN-02 (reservas) y RN-08 (agenda de eventos) dicen que NO puede
- * haber dos reservas en la misma hora y espacio. Este bloque esta en
- * utils por la regla R-DRY: se usa en dos places distintos.
+ * Se calcula con mes y dia y no dividiendo por 365: dividiendo por
+ * 365 alguien nacido hace 18 años exactos podria aparecer como mayor
+ * un dia antes de su cumpleaños.
  *
- * DOS INTERVALOS SE SOLAPAN SI:
- *
- *      inicio1 < fin2   Y   inicio2 < fin1
- *
- * EJEMPLOS (horas):
- *
- *   21:00-23:00  y  22:00-00:00  -> SI se solapan (21<00 y 22<23)
- *   21:00-23:00  y  23:00-01:00  -> NO  (se tocan en 23:00, sin
- *                                     traslape: el primero termina
- *                                     justo cuando empieza el otro)
- *
- * @param {string} inicio1  Inicio del primer intervalo
- * @param {string} fin1     Fin del primer intervalo
- * @param {string} inicio2  Inicio del segundo intervalo
- * @param {string} fin2     Fin del segundo intervalo
- * @returns {boolean} true si hay traslape real
+ * @param {*} nacimiento
+ * @returns {number|null}
  */
-function haySolapeHorario(inicio1, fin1, inicio2, fin2) {
-  const a1 = new Date(inicio1).getTime();
-  const b1 = new Date(fin1).getTime();
-  const a2 = new Date(inicio2).getTime();
-  const b2 = new Date(fin2).getTime();
+function calcularEdad(nacimiento) {
+  const fecha = aDate(nacimiento);
+  if (fecha === null) return null;
 
-  // Si alguna fecha no se pudo interpretar, no arriesgamos: mejor no
-  // detectar un conflicto falso. La validacion de formato ocurre antes.
-  if ([a1, b1, a2, b2].some((t) => Number.isNaN(t))) {
-    return false;
+  const hoy = new Date();
+
+  let edad = hoy.getFullYear() - fecha.getFullYear();
+  const mes = hoy.getMonth() - fecha.getMonth();
+
+  if (mes < 0 || (mes === 0 && hoy.getDate() < fecha.getDate())) {
+    edad -= 1;
   }
 
-  return a1 < b2 && a2 < b1;
+  return edad;
+}
+
+/**
+ * Fecha y hora actuales en ISO. Util para marcar auditorias.
+ * @returns {string}
+ */
+function ahoraISO() {
+  return new Date().toISOString();
 }
 
 module.exports = {
+  aDate,
   aFechaISO,
   aFechaHoraISO,
   aFechaMySQL,
-  esFutura,
-  esPasada,
-  ahoraEnMySQL,
-  haySolapeHorario
+  esFechaPasada,
+  esFechaFutura,
+  calcularEdad,
+  ahoraISO
 };

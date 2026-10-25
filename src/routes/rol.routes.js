@@ -1,58 +1,91 @@
 /**
  * src/routes/rol.routes.js
  * ---------------------------------------------------------------------
- * CAPA DE RUTAS de la entidad Rol: declara el CONTRATO HTTP.
+ * CAPA DE RUTAS de la entidad Rol.
  *
- * Los middlewares de validacion van ANTES del controlador:
- *   - validarIdNumerico('id') -> si el id no es numero, responde 400
- *     sin llegar a la capa de servicio (ahorra una consulta a la base).
- *   - exigirCuerpo            -> si no hay cuerpo JSON, 400 inmediato.
+ * DECLARA EL CONTRATO: que verbo HTTP + que URL ejecuta que controlador
+ * y por que middlewares pasa antes. Es la "tabla de contenido" de la
+ * API: cualquiera puede abrir este archivo y saber en 20 segundos todo
+ * lo que permite hacer con los roles.
+ *
+ * express.Router() crea un mini-aplicacion de rutas que luego se monta
+ * bajo '/api/roles'. Aqui la ruta '/' se convierte en '/api/roles'.
+ *
+ * EL ORDEN DE LAS RUTAS IMPORTA
+ * Express evalua de arriba hacia abajo y se detiene en la PRIMERA que
+ * coincide. Por eso el sub-recurso '/:id/permisos' va ANTES de '/:id':
+ * de lo contrario, GET /api/roles/5/permisos lo atraparia '/:id' con
+ * id = "5/permisos" y nunca llegaria a donde debe.
  *
  * TABLA DE ENDPOINTS
  * ---------------------------------------------------------------------
- * GET    /api/roles                     Lista con filtros y paginacion
- * GET    /api/roles/:id                 Detalle (incluye permisos)
- * POST   /api/roles                     Crear
- * PUT    /api/roles/:id                 Actualizar
- * PATCH  /api/roles/:id/estado          Cambiar estado (activo/inactivo)
- * DELETE /api/roles/:id                 Eliminar (409 si tiene usuarios)
- * POST   /api/roles/:id/permisos        Asignar permiso (body: idPermiso)
- * DELETE /api/roles/:id/permisos/:idPermiso  Quitar permiso
- * PROTECCION (fase 22): todo el CRUD exige token + permiso
- * `roles.gestionar` (quien controla roles controla permisos).
+ * GET    /api/roles                              Listado
+ * POST   /api/roles                              Crear (201)
+ * GET    /api/roles/:id                          Detalle con permisos
+ * PUT    /api/roles/:id                          Actualizar
+ * PATCH  /api/roles/:id/estado                   Cambiar estado
+ * DELETE /api/roles/:id                          Eliminar
+ * POST   /api/roles/:id/permisos                 Asignar permiso (200)
+ * DELETE /api/roles/:id/permisos/:idPermiso      Quitar permiso (200)
  * ---------------------------------------------------------------------
+ *
+ * NINGUNA RUTA TIENE MIDDLEWARE DE AUTENTICACION en esta fase: las
+ * rutas estan abiertas a proposito mientras se prueba en Postman. El
+ * JWT se montara despues, en la fase de seguridad.
  */
 
-const { Router } = require('express');
+const express = require('express');
 
 const rolController = require('../controllers/rol.controller');
 const { validarIdNumerico, exigirCuerpo } = require('../middleware/validarParametros');
-const { requiereAutenticacion } = require('../middleware/autenticacion');
-const { requierePermiso } = require('../middleware/autorizacion');
 
-const router = Router();
+const router = express.Router();
 
-// Proteccion GLOBAL de la ruta: todo lo que sigue pasa por aqui.
-router.use(requiereAutenticacion, requierePermiso('roles.gestionar'));
+// ---------------------------------------------------------------------
+// Coleccion: /api/roles
+// ---------------------------------------------------------------------
 
-// ---- Coleccion: /api/roles ----
+// GET /api/roles
 router.get('/', rolController.listar);
+
+// POST /api/roles
+// exigirCuerpo corre ANTES del controlador y rechaza cuerpos vacios.
 router.post('/', exigirCuerpo, rolController.crear);
 
-// ---- Recurso individual: /api/roles/:id ----
+// ---------------------------------------------------------------------
+// Sub-recurso de permisos (va ANTES de '/:id' por el orden de evaluacion)
+// ---------------------------------------------------------------------
+
+// POST /api/roles/:id/permisos
+router.post(
+  '/:id/permisos',
+  validarIdNumerico('id'),
+  exigirCuerpo,
+  rolController.asignarPermiso
+);
+
+// DELETE /api/roles/:id/permisos/:idPermiso
+router.delete(
+  '/:id/permisos/:idPermiso',
+  validarIdNumerico('id'),
+  validarIdNumerico('idPermiso'),
+  rolController.quitarPermiso
+);
+
+// ---------------------------------------------------------------------
+// Recurso individual: /api/roles/:id
+// ---------------------------------------------------------------------
+
+// GET /api/roles/:id
 router.get('/:id', validarIdNumerico('id'), rolController.obtener);
+
+// PUT /api/roles/:id
 router.put('/:id', validarIdNumerico('id'), exigirCuerpo, rolController.actualizar);
 
-// Ruta mas especifica que /:id, asi que va declarada en cualquier
-// posicion valida: Express la evalua y coincide primero por el literal.
+// PATCH /api/roles/:id/estado
 router.patch('/:id/estado', validarIdNumerico('id'), exigirCuerpo, rolController.cambiarEstado);
 
+// DELETE /api/roles/:id
 router.delete('/:id', validarIdNumerico('id'), rolController.eliminar);
-
-// ---- Relacion N:M rol<->permiso ----
-// El id del permiso a asignar va en el BODY; el id a quitar, en la URL
-// (porque DELETE no acepta cuerpo de forma portable).
-router.post('/:id/permisos', validarIdNumerico('id'), exigirCuerpo, rolController.asignarPermiso);
-router.delete('/:id/permisos/:idPermiso', validarIdNumerico('id', 'idPermiso'), rolController.quitarPermiso);
 
 module.exports = router;

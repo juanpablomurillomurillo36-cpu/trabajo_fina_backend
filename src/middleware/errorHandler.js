@@ -1,216 +1,195 @@
 /**
  * src/middleware/errorHandler.js
  * ---------------------------------------------------------------------
- * Manejadores de error de Express.
+ * Manejo CENTRALIZADO de errores.
  *
- * COMO LLEGA UN ERROR HASTA AQUI?
+ * La idea: en los services y controllers simplemente lanzamos el error
+ * (`throw`). Nadie responde errores a mano. Todos los errores terminan
+ * aqui, en un solo lugar, que decide:
+ *   - que codigo HTTP responder,
+ *   - que mensaje mostrarle al usuario,
+ *   - que registrar en el log del servidor.
  *
- *   Express tiene UN manejador de errores final. Cualquier `throw` que
- *   ocurra en una ruta, un controller o un service termina aqui y solo
- *   aqui se decide que respuesta HTTP se manda. Eso garantiza que TODA
- *   la API responda con el mismo formato:
+ * Ventaja: si manana hay que enviar los errores a un sistema de
+ * monitoreo (Sentry, por ejemplo), se agrega UNA linea aqui y cubre
+ * toda la aplicacion.
  *
- *      { ok: false, error: { codigo, mensaje, detalles } }
- *
- * capturarAsync() - EL TRUCO QUE LIMPIA LOS CONTROLLERS
- * ---------------------------------------------------------------------
- *   Si un controller es `async` y lanza un error, Express 4 NO lo
- *   atrapa solo: la promesa queda rechazada y el cliente se queda sin
- *   respuesta. La solucion clasica seria envolver cada metodo en
- *   try/catch, lo cual repite codigo por todos lados (anti R-DRY).
- *
- *   `capturarAsync` envuelve el controller una sola vez y deriva
- *   cualquier error al manejador central. Gracias a esto, en los
- *   controllers NO hay NI UN try/catch.
+ * REGLA DE ORO DE EXPRESS: el middleware de errores tiene CUATRO
+ * parametros (err, req, res, next). Si le pones tres, Express lo
+ * registra como middleware normal y NUNCA atrapara los errores. Por
+ * eso la funcion de abajo tiene el `next` final sin usar.
  */
 
-const respuesta = require('../utils/respuesta');
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
-const { registrar } = require('./logger');
+const { HTTP, CODIGO_ERROR } = require('../utils/constants');
+const respuesta = require('../utils/respuesta');
+const config = require('../config/env');
+const { COLOR } = require('./logger');
 
 /**
- * Envuelve un controlador async para que sus errores vayan al
- * manejador central.
+ * Traduce los codigos de error de MySQL a errores de la aplicacion.
  *
- *   listar = capturarAsync(async (req, res) => { ... })
+ * MySQL devuelve codigos tecnicos como 'ER_DUP_ENTRY' que no se le
+ * pueden mostrar a un usuario final. Aqui los convertimos en mensajes
+ * entendibles y en el codigo HTTP adecuado.
  *
- * @param {function} controlador  Funcion async (req, res)
- * @returns {function} Funcion compatible con Express
+ * @param {Error} error  Error original del driver mysql2.
+ * @returns {AppError|null}  AppError traducido, o null si no era de MySQL.
  */
-function capturarAsync(controlador) {
-  // Express detecta los middlewares con 4 parametros como "de errores".
-  // Por eso manejamos explicitamente los 3 argumentos.
-  return function (req, res, next) {
-    // Promise.resolve(...).catch() garantiza que TANTO los errores
-    // lanzados con `throw` como las promesas rechazadas caigan en
-    // `next(error)`.
-    Promise.resolve(controlador(req, res, next)).catch(next);
-  };
-}
+function traducirErrorMySQL(error) {
+  // El driver mysql2 agrega la propiedad `code` a sus errores.
+  const codigo = error.code;
 
-/**
- * Ultima ruta de la API: si ninguna ruta coincide, responde 404.
- * Se monta DESPUES de todas las rutas, en config/express.js.
- *
- * @param {object} req
- * @param {object} res
- */
-function rutaNoEncontrada(req, res) {
-  const error = AppError.noEncontrado(
-    MENSAJES.SISTEMA.RUTA_NO_ENCONTRADA(`${req.method} ${req.originalUrl}`)
-  );
+  switch (codigo) {
+    // Se intento insertar un valor repetido en una llave UNIQUE.
+    // Aqui pasa dos veces: nombre_rol unico y email unico. El service
+    // ya los detecta antes, pero si dos peticiones llegan a la vez
+    // (condicion de carrera) el ultimo en llegar lo atrapa MySQL.
+    case 'ER_DUP_ENTRY':
+      return AppError.conflicto(
+        'El registro ya existe. Revisa los campos que deben ser unicos.'
+      );
 
-  return respuesta.fallo(res, error);
-}
-
-/**
- * MANEJADOR DE ERRORES GLOBAL.
- *
- * Express reconoce este middleware porque recibe CUATRO parametros
- * (err, req, res, next). Es el unico lugar que decide la respuesta
- * final cuando algo sale mal.
- *
- * FLUJO:
- *   1. Si es un AppError -> ya trae su codigo HTTP, se responde tal cual.
- *   2. Si es otro error (inesperado) -> se loguea completo y se
- *      responde 500 con mensaje GENERICO (nunca filtrar detalles
- *      internos al cliente).
- *
- * @param {Error} err
- * @param {object} req
- * @param {object} res
- * @param {function} next  Obligatorio para que Express lo reconozca
- */
-function manejadorErrores(err, req, res, next) {
-  // Esta linea existe solo para que el parametro `next` cuente.
-  // Si Express no ve 4 argumentos, no trata este bloque como
-  // manejador de errores.
-  if (typeof next !== 'function') return;
-
-  // ---- Caso 0: errores que SABEMOS traducir a un AppError ----
-  // Se convierten ANTES de decidir, para que sigan el mismo camino de
-  // respuesta (y el mismo formato de logueo) que cualquier otro error
-  // de la aplicacion. Sin esta normalizacion, un JSON mal formado
-  // llegaria como 500 "inesperado" y el cliente no sabria que EL fue
-  // quien mando mal la peticion.
-  const errorTraducido = interpretarErrorCuerpoJson(err);
-  if (errorTraducido !== null) {
-    err = errorTraducido;
-  }
-
-  // ---- Caso 1: error de la aplicacion (AppError) ----
-  if (err instanceof AppError) {
-    // Los 4xx son esperados (el cliente mando algo mal): se loguea en
-    // nivel "aviso", no en error, para no ensuciar el log.
-    registrar(
-      err.estado >= 500 ? 'error' : 'aviso',
-      `${err.codigo} ${err.estado}`,
-      { ruta: `${req.method} ${req.originalUrl}`, mensaje: err.message, detalles: err.detalles }
-    );
-
-    return respuesta.fallo(res, err);
-  }
-
-  // ---- Caso 2: error de MySQL con codigo conocido ----
-  const errorMysql = interpretarErrorMysql(err);
-  if (errorMysql !== null) {
-    registrar('error', `MYSQL ${errorMysql.codigo}`, {
-      ruta: `${req.method} ${req.originalUrl}`,
-      mensaje: err.message
-    });
-
-    return respuesta.fallo(res, errorMysql);
-  }
-
-  // ---- Caso 3: error inesperado ----
-  // El detalle COMPLETO (stack trace) se guarda en el log del servidor.
-  // Al cliente solo se le dice que fallo algo, sin expor internos.
-  registrar('error', 'NO_PREVISTO', {
-    ruta: `${req.method} ${req.originalUrl}`,
-    mensaje: err.message,
-    pila: err.stack
-  });
-
-  return respuesta.fallo(res, AppError.interno(MENSAJES.SISTEMA.ERROR_INTERNO));
-}
-
-/**
- * Detecta el error que lanza body-parser cuando el cuerpo NO es JSON
- * valido (llaves sin comillas, coma final, texto plano, etc.).
- *
- * POR QUE HACE FALTA?
- * Porque body-parser lanza un SyntaxError generico, y si nadie lo
- * traduce la API responde 500 (culpa del servidor) cuando en realidad
- * quien fallo fue el cliente: corresponde un 400.
- *
- * El comprobante `err.status === 400` es importante: NO basta con
- * `instanceof SyntaxError`, porque el servidor podria lanzar un
- * SyntaxError propio por un bug interno, y ese si es un 500.
- *
- * @param {Error} err
- * @returns {AppError|null} 400 si es un JSON mal formado; null si no.
- */
-function interpretarErrorCuerpoJson(err) {
-  if (!(err instanceof SyntaxError) || err.status !== 400) return null;
-
-  // err.message trae la posicion exacta del fallo
-  // ("...JSON at position 12"): es informacion que viene DEL CLIENTE,
-  // por eso es seguro devolverla y le sirve para corregir su peticion.
-  return AppError.validacion(MENSAJES.VALIDACION.CORPUS_JSON_INVALIDO, [
-    { campo: 'cuerpo', mensaje: err.message }
-  ]);
-}
-
-/**
- * Traduce los codigos de error mas comunes de MySQL a errores de la
- * API con su codigo HTTP correcto.
- *
- *   ER_DUP_ENTRY (1062) -> 409 Conflicto (ya existe un registro unico)
- *   ER_ROW_IS_REFERENCED -> 409 (no se puede borrar: esta en uso)
- *   ER_NO_REFERENCED_ROW -> 400 (referencia a algo que no existe)
- *
- * Si el codigo no se conoce, devuelve null y el manejador sigue.
- *
- * @param {Error} err
- * @returns {AppError|null}
- */
-function interpretarErrorMysql(err) {
-  if (!err || typeof err.code !== 'string') return null;
-
-  switch (err.code) {
-    case 'ER_DUP_ENTRY': {
-      // err.sqlMessage trae el nombre del indice que fallo, lo que
-      // permite dar un mensaje concreto ("ya existe...").
-      const detalle = err.sqlMessage || 'Valor duplicado';
-      return AppError.conflicto(MENSAJES.NEGOCIO.NOMBRE_DUPLICADO('registro', detalle), [
-        { campo: 'registro', mensaje: detalle }
-      ]);
-    }
-
-    case 'ER_ROW_IS_REFERENCED':
-    case 'ER_ROW_IS_REFERENCED_2':
-      return AppError.conflicto('No se puede eliminar: el registro esta siendo utilizado por otros datos.');
-
+    // Se referencio un id que no existe en la tabla padre.
+    // Ejemplo: crear un usuario con id_rol = 9999.
     case 'ER_NO_REFERENCED_ROW':
     case 'ER_NO_REFERENCED_ROW_2':
-      return AppError.validacion('La referencia indicada no existe en la base de datos.');
+      return new AppError(
+        'El registro referenciado no existe. Verifica los identificadores enviados.',
+        HTTP.BAD_REQUEST,
+        CODIGO_ERROR.LLAVE_FORANEA
+      );
 
+    // Se intento borrar un registro padre que aun tiene hijos.
+    // Ejemplo: borrar un rol que todavia tiene usuarios asignados.
+    case 'ER_ROW_IS_REFERENCED':
+    case 'ER_ROW_IS_REFERENCED_2':
+      return new AppError(
+        'No se puede eliminar el registro porque otros registros dependen de el.',
+        HTTP.CONFLICTO,
+        CODIGO_ERROR.LLAVE_FORANEA
+      );
+
+    // El texto enviado es mas largo que el VARCHAR de la columna.
     case 'ER_DATA_TOO_LONG':
-      return AppError.validacion('Uno de los campos supera la longitud maxima permitida.');
+      return AppError.validacion(
+        'Uno de los campos supera el tamanio maximo que permite la base de datos.'
+      );
 
+    // Se envio null en una columna NOT NULL.
     case 'ER_BAD_NULL_ERROR':
-      return AppError.validacion('Uno de los campos obligatorios viene vacio.');
+      return AppError.validacion('Falta un campo obligatorio requerido por la base de datos.');
+
+    // Columna ENUM con un valor que no esta en la lista.
+    case 'ER_WRONG_VALUE_FOR_COLUMN':
+    case 'ER_TRUNCATED_WRONG_VALUE':
+      return AppError.validacion('Uno de los valores enviados no esta permitido por la base de datos.');
+
+    // El servidor MySQL esta apagado o no acepta conexiones.
+    case 'ECONNREFUSED':
+    case 'PROTOCOL_CONNECTION_LOST':
+    case 'ER_CON_COUNT_ERROR':
+      return AppError.baseDatos(
+        'No se pudo conectar con la base de datos. Verifica que MySQL este encendido.'
+      );
+
+    // Usuario o clave incorrectos en el archivo .env
+    case 'ER_ACCESS_DENIED_ERROR':
+    case 'ER_BAD_DB_ERROR':
+      return AppError.baseDatos(
+        'Credenciales de base de datos incorrectas. Revisa DB_USUARIO, DB_CLAVE y DB_NOMBRE en src/.env'
+      );
 
     default:
+      // No era un error de MySQL que sepamos traducir.
       return null;
   }
 }
 
+/**
+ * Middleware 404: se registra DESPUES de todas las rutas.
+ * Si la peticion llego hasta aqui, ninguna ruta coincidio.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {function} next
+ */
+function rutaNoEncontrada(req, res, next) {
+  const error = AppError.rutaNoEncontrada(
+    MENSAJES.SISTEMA.RUTA_NO_ENCONTRADA(req.method, req.originalUrl)
+  );
+
+  // next(error) salta directo al middleware de errores.
+  // Si llamaramos next() sin argumento, seguiria la cadena normal.
+  next(error);
+}
+
+/**
+ * Middleware de errores. DEBE ser el ultimo app.use() de la aplicacion
+ * y DEBE declarar cuatro parametros.
+ *
+ * @param {Error} err
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {function} next  Obligatorio: sin el, Express no lo trata
+ *                         como middleware de errores.
+ */
+// eslint-disable-next-line no-unused-vars
+function manejadorErrores(err, req, res, next) {
+  // ----- Paso 1: normalizar el error a un AppError -----
+  let error = err;
+
+  if (!(error instanceof AppError)) {
+    // Caso A: JSON mal formado. express.json() lanza un SyntaxError
+    // con la propiedad `body` cuando el cuerpo no se pudo parsear.
+    // Un cliente que olvido la cabecera Content-Type produce esto.
+    if (error instanceof SyntaxError && 'body' in error) {
+      error = AppError.cuerpoInvalido(MENSAJES.SISTEMA.JSON_MAL_FORMADO);
+    } else {
+      // Caso B: error del driver de MySQL.
+      const traducido = traducirErrorMySQL(error);
+
+      if (traducido !== null) {
+        error = traducido;
+      } else {
+        // Caso C: cualquier otro error inesperado (un bug nuestro).
+        // No mostramos el mensaje interno al cliente para no filtrar
+        // detalles de implementacion; eso solo viaja al log.
+        error = AppError.interno(MENSAJES.SISTEMA.ERROR_INTERNO);
+      }
+    }
+  }
+
+  // ----- Paso 2: registrar en el log del servidor -----
+  const esErrorServidor = error.status >= HTTP.ERROR_INTERNO;
+
+  if (esErrorServidor) {
+    // Los errores 5xx son bugs: registramos TODO, incluido el stack.
+    console.error(
+      `${COLOR.rojo}[ERROR ${error.status}]${COLOR.reinicio} ` +
+        `${req.method} ${req.originalUrl}\n`,
+      err.stack || err
+    );
+  } else if (config.esDesarrollo) {
+    // Los 4xx son errores del cliente: una linea basta.
+    console.warn(
+      `${COLOR.amarillo}[AVISO ${error.status}]${COLOR.reinicio} ` +
+        `${req.method} ${req.originalUrl} -> ${error.message}`
+    );
+  }
+
+  // ----- Paso 3: responder al cliente -----
+  return respuesta.error(res, {
+    estado: error.status,
+    codigo: error.codigo,
+    mensaje: error.message,
+    detalles: error.detalles
+  });
+}
+
 module.exports = {
-  capturarAsync,
   rutaNoEncontrada,
   manejadorErrores,
-  interpretarErrorMysql,
-  interpretarErrorCuerpoJson
+  traducirErrorMySQL
 };

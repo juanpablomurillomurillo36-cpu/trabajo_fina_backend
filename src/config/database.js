@@ -1,7 +1,7 @@
 /**
  * src/config/database.js
  * ---------------------------------------------------------------------
- * Clase BaseDatos: UNICO punto de acceso a MySQL en toda la aplicacion.
+ * Clase Database: unico punto de acceso a MySQL en toda la aplicacion.
  *
  * CONCEPTOS QUE SE APLICAN AQUI
  *
@@ -9,35 +9,35 @@
  *    Abrir una conexion a MySQL es costoso (handshake, autenticacion).
  *    El pool abre un grupo de conexiones una sola vez y las presta y
  *    recoge segun la demanda. Es como una fila de cajeros en un banco:
- *    el cliente no contrata un cajero nuevo, usa uno libre.
+ *    el cliente no contrata un cajerito nuevo, usa uno libre.
  *
  * 2. SINGLETON
  *    Exportamos UNA instancia ya creada, no la clase. Asi, por mas
  *    archivos que hagan require() de este modulo, todos comparten el
  *    mismo pool. Node.js cachea los modulos, de modo que el codigo de
- *    abajo se ejecuta una sola vez.
+ *    abajo se ejecuta una sola vez en la vida del proceso.
  *
  * 3. CONSULTAS PARAMETRIZADAS (prepared statements)
- *    JAMAS se concatena texto en una consulta SQL:
+ *    JAMAS se concatena texto del cliente en una consulta SQL:
  *
  *       MAL:  `SELECT * FROM roles WHERE id_rol = ${id}`
  *       BIEN: 'SELECT * FROM roles WHERE id_rol = ?'  +  [id]
  *
  *    En la version mala, si id vale "1 OR 1=1" el atacante lee toda la
  *    tabla. Eso es una INYECCION SQL. Con el signo ? el driver envia
- *    el valor por separado y MySQL lo trata siempre como dato, nunca
+ *    el valor por separado y MySQL lo trata SIEMPRE como dato, nunca
  *    como codigo.
  *
  * 4. ENCAPSULAMIENTO
- *    El pool es un atributo PRIVADO (#pool). Ningun repositorio puede
+ *    El pool es un atributo PRIVADO (#pool). Ningun service puede
  *    tocarlo directo; solo puede llamar a los metodos publicos
- *    ejecutar(), obtenerUno() y conTransaccion().
+ *    ejecutar(), obtenerUno(), conTransaccion() y cerrar().
  */
 
 const mysql = require('mysql2/promise');
-const configuracion = require('./env');
+const config = require('./env');
 
-class BaseDatos {
+class Database {
   // ---- Atributos privados (el # los hace inaccesibles desde afuera) ----
   #pool;
   #estaConectada;
@@ -56,7 +56,7 @@ class BaseDatos {
 
   /**
    * Devuelve el pool, creandolo la primera vez que se necesita
-   * (patron "inicializacion perezosa" o lazy initialization).
+   * (patron "lazy initialization" o inicializacion perezosa).
    */
   get pool() {
     if (this.#pool === null) {
@@ -73,33 +73,32 @@ class BaseDatos {
    */
   #crearPool() {
     this.#pool = mysql.createPool({
-      host: configuracion.baseDatos.host,
-      port: configuracion.baseDatos.puerto,
-      user: configuracion.baseDatos.usuario,
-      password: configuracion.baseDatos.clave,
-      database: configuracion.baseDatos.nombre,
+      host: config.baseDatos.host,
+      port: config.baseDatos.puerto,
+      user: config.baseDatos.usuario,
+      password: config.baseDatos.clave,
+      database: config.baseDatos.nombre,
 
-      // Si todas las conexiones estan ocupadas, la peticion espera en
-      // cola en vez de fallar de inmediato.
+      // waitForConnections: si todas las conexiones estan ocupadas,
+      // la peticion espera en cola en vez de fallar de inmediato.
       waitForConnections: true,
 
       // Maximo de conexiones simultaneas.
-      connectionLimit: configuracion.baseDatos.limiteConexiones,
+      connectionLimit: config.baseDatos.limiteConexiones,
 
       // 0 = la cola de espera es ilimitada.
       queueLimit: 0,
 
-      // Soporte de acentos y emojis (ñ, tildes).
+      // Soporte de acentos, eñes y emojis.
       charset: 'utf8mb4',
 
-      // 'local' hace que los DATETIME se interpreten en la zona horaria
-      // del servidor. Debe coincidir con lo que hace utils/fechas.js.
+      // 'local' hace que los DATETIME se interpreten en la zona
+      // horaria del equipo. Debe coincidir con lo que hace
+      // utils/fechas.js para que una fecha de las 22:00 no se corra.
       timezone: 'local',
 
-      // false = DECIMAL y BIGINT llegan como TEXTO para no perder
-      // precision en los calculos de dinero (precio, IVA, totales).
-      // Quien necesite hacer numeros convierte con Number() de forma
-      // explicita.
+      // Devuelve DECIMAL como texto para no perder precision con el
+      // dinero (16.50 no debe convertirse en 16.49999999).
       decimalNumbers: false
     });
   }
@@ -154,7 +153,7 @@ class BaseDatos {
 
   /**
    * Ejecuta una consulta y devuelve SOLO la primera fila, o null.
-   * Evita escribir `filas[0] ?? null` en cada repositorio.
+   * Evita escribir `filas[0] ?? null` en cada service.
    *
    * @param {string} sql
    * @param {Array} parametros
@@ -176,20 +175,20 @@ class BaseDatos {
    *
    * Una transaccion es un bloque "todo o nada". Si cualquier paso
    * falla, se deshacen TODOS los anteriores (rollback) y la base de
-   * datos queda como estaba.
+   * datos queda exactamente como estaba.
    *
-   * Caso real de esta API: al CONFIRMAR una compra hay que sumar el
-   * stock de cada producto y cambiar el estado de la compra. Si el
-   * cambio de estado fallara a mitad de camino, no queremos que el
-   * stock ya hubiera subido sin razon.
+   * Caso real de esta API: al asignar un permiso a un rol hay que
+   * INSERTAR en la tabla puente y luego RECONTAR. Si el recuento
+   * fallara a mitad de camino, no queremos una fila huerfana en
+   * rol_permiso.
    *
    * @param {function} trabajo  Funcion async que recibe la conexion.
    * @returns {Promise<*>}      Lo que devuelva la funcion `trabajo`.
    *
    * @example
    *   await db.conTransaccion(async (conexion) => {
-   *     await conexion.execute('UPDATE productos SET ... WHERE ...', [x]);
-   *     await conexion.execute('UPDATE compras SET estado = ... ', [y]);
+   *     await conexion.execute('DELETE FROM detalle WHERE id = ?', [id]);
+   *     await conexion.execute('DELETE FROM cabecera WHERE id = ?', [id]);
    *   });
    */
   async conTransaccion(trabajo) {
@@ -224,6 +223,8 @@ class BaseDatos {
   /**
    * Cierra todas las conexiones del pool.
    * Se llama al apagar el servidor (apagado elegante o graceful shutdown).
+   *
+   * @returns {Promise<void>}
    */
   async cerrar() {
     if (this.#pool !== null) {
@@ -237,6 +238,6 @@ class BaseDatos {
 // ---------------------------------------------------------------------
 // SINGLETON: exportamos una INSTANCIA, no la clase.
 // Node.js guarda en cache el resultado de cada require(), por eso
-// `new BaseDatos()` corre una sola vez en toda la vida del proceso.
+// `new Database()` corre una sola vez en toda la vida del proceso.
 // ---------------------------------------------------------------------
-module.exports = new BaseDatos();
+module.exports = new Database();

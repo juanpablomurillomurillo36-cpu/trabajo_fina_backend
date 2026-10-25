@@ -1,85 +1,53 @@
 /**
  * src/utils/formato.js
  * ---------------------------------------------------------------------
- * Funciones de NORMALIZACION de datos que llegan del cliente.
+ * Helpers de formato "sin estado": funciones puras que reciben algo y
+ * devuelven otra cosa, sin tocar la base de datos ni HTTP.
  *
- * Este archivo es parte de la regla R-DRY (no repetir codigo): si
- * varios services necesitan limpiar un texto o convertir un numero,
- * lo hacen llamando a la MISMA funcion de aqui.
- *
- * EL FLUJO DE UN SERVICE ES SIEMPRE:
- *   1. NORMALIZAR (este archivo)  -> limpiar y convertir
- *   2. VALIDAR     (validadores)  -> rechazar lo invalido
- *   3. INSTANCIAR  (models)       -> crear el objeto
- *   4. PERSISTIR   (repositories) -> guardar con SQL parametrizado
- *
- * IMPORTANTE: normalizamos solo lo que REALMENTE llego. Si el cliente
- * no envio un campo, no lo tocamos (eso permite las actualizaciones
- * parciales de un PUT).
+ * Estan separadas de los validadores porque NO rechazan: aqui solo se
+ * NORMALIZA. En validadores.js, en cambio, se rechaza lo malo.
  */
 
-// ---------------------------------------------------------------------
-// Textos
-// ---------------------------------------------------------------------
-
 /**
- * Elimina espacios sobrantes de los extremos y colapsa espacios dobles.
+ * Recorta espacios al inicio y al final y colapsa los espacios
+ * internos dobles.
  *
- *   "  Ana   Maria  "  ->  "Ana Maria"
+ * "  Maria   Jose  "  ->  "Maria Jose"
  *
  * @param {*} valor
- * @returns {string|null} null si el valor estaba vacio o no era texto
+ * @returns {string}
  */
 function limpiarTexto(valor) {
-  if (valor === null || valor === undefined) return null;
-  if (typeof valor !== 'string') return null;
+  if (typeof valor !== 'string') return valor;
 
-  const limpio = valor.replace(/\s+/g, ' ').trim();
-  return limpio === '' ? null : limpio;
+  return valor.replace(/\s+/g, ' ').trim();
 }
 
 /**
- * Convierte a "Titulo Propio": solo la primera letra de cada palabra
- * en mayuscula.
+ * Convierte a formato Titulo: "juan carlos perez" -> "Juan Carlos Perez".
  *
- *   "ANA maria"  ->  "Ana Maria"
- *   "jUAN PABLO" ->  "Juan Pablo"
+ * Se aplica SOLO a nombres propios. Nunca a correos, contrasenas ni
+ * codigos, porque alli las mayusculas son significativas.
  *
  * @param {*} valor
- * @returns {string|null}
+ * @returns {string}
  */
 function aTituloPropio(valor) {
-  const texto = limpiarTexto(valor);
-  if (texto === null) return null;
+  if (typeof valor !== 'string' || valor.trim() === '') return valor;
 
-  return texto
+  return limpiarTexto(valor)
     .toLowerCase()
-    .replace(/(^|[\s'-])(\p{L})/gu, (_, separador, letra) => separador + letra.toUpperCase());
+    .replace(/(^|\s)([a-záéíóúñ])/g, (coincidencia, espacio, letra) => `${espacio}${letra.toUpperCase()}`);
 }
 
 /**
- * Convierte el texto a minusculas y lo limpia. Ideal para CORREOS,
- * donde "Ana@Correo.COM" y "ana@correo.com" son la misma direccion.
+ * Convierte a entero si es posible; si no, devuelve null.
  *
- * @param {*} valor
- * @returns {string|null}
- */
-function aMinusculas(valor) {
-  const texto = limpiarTexto(valor);
-  return texto === null ? null : texto.toLowerCase();
-}
-
-// ---------------------------------------------------------------------
-// Numeros
-// ---------------------------------------------------------------------
-
-/**
- * Convierte a entero. Devuelve null si no es un numero util.
- *
- *   "15"    -> 15
- *   "15.7"  -> 15
- *   "abc"   -> null
- *   ""      -> null
+ * "12"   -> 12
+ * 12     -> 12
+ * "12.7" -> 12      (Math.trunc corta los decimales)
+ * "abc"  -> null
+ * 3.99   -> 3
  *
  * @param {*} valor
  * @returns {number|null}
@@ -87,158 +55,121 @@ function aMinusculas(valor) {
 function aEnteroONulo(valor) {
   if (valor === null || valor === undefined || valor === '') return null;
 
-  const numero = Number(valor);
-  if (!Number.isFinite(numero)) return null;
+  const numero = typeof valor === 'number' ? valor : Number.parseFloat(valor);
+
+  if (Number.isNaN(numero)) return null;
 
   return Math.trunc(numero);
 }
 
 /**
- * Convierte a numero con decimales (precios, totales, IVA).
- * Devuelve null si no es un numero.
+ * Interpreta valores "booleanos" que llegan como texto desde una
+ * query string (?activo=true).
  *
- * Los DECIMAL de MySQL llegan como TEXTO ("1500.00") por la
- * configuracion del pool, asi que SIEMPRE hay que pasar por aqui
- * antes de hacer cualquier calculo.
- *
- * @param {*} valor
- * @returns {number|null}
- */
-function aDecimalONulo(valor) {
-  if (valor === null || valor === undefined || valor === '') return null;
-  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null;
-
-  // Al limpiar 'gratis' queda la cadena vacia, y Number('') es 0:
-  // sin esta guarda el campo devolveria un precio de 0 en vez de null.
-  const limpio = String(valor).replace(/[^0-9.\-]/g, '');
-  if (limpio === '' || limpio === '-' || limpio === '.') return null;
-
-  const numero = Number(limpio);
-  return Number.isFinite(numero) ? numero : null;
-}
-
-/**
- * Normaliza una hora 'HH:MM' o 'HH:MM:SS' a 'HH:MM:SS' (formato de
- * las columnas TIME de MySQL). Devuelve null si no es hora valida.
- *
- *   "18:30"    -> "18:30:00"
- *   "18:30:15" -> "18:30:15"
- *   "25:00"    -> null
- *   "mañana"   -> null
- *
- * Se comparte entre validadores.exigirHora y los services para no
- * repetir la expresion regular (DRY).
+ * "true" | "1" | "si"  -> true
+ * "false" | "0" | "no" -> false
+ * cualquier otra cosa   -> el valorPorDefecto
  *
  * @param {*} valor
- * @returns {string|null}
- */
-function aHoraONulo(valor) {
-  if (valor === null || valor === undefined || valor === '') return null;
-  if (typeof valor !== 'string') return null;
-
-  const coincide = valor.trim().match(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/);
-  if (!coincide) return null;
-
-  return coincide[0].length === 5 ? `${coincide[0]}:00` : coincide[0];
-}
-
-/**
- * Redondea un decimal a 2 posiciones (dinero).
- *
- *   1500.456  ->  1500.46
- *
- * Se usa el truco de sumar y restar Number.EPSILON porque
- * (2.005).toFixed(2) da "2.00" en vez de "2.01" por el error de
- * punto flotante de JavaScript.
- *
- * @param {number} valor
- * @returns {number}
- */
-function redondearDosDecimales(valor) {
-  return Math.round((valor + Number.EPSILON) * 100) / 100;
-}
-
-/**
- * Formatea un numero como moneda mexicana para mostrarlo.
- *
- *   1500  ->  "$1,500.00"
- *
- * @param {*} valor
- * @returns {string} "No disponible" si el valor no es un numero
- */
-function aTextoMoneda(valor) {
-  const numero = aDecimalONulo(valor);
-  if (numero === null) return 'No disponible';
-
-  return numero.toLocaleString('es-MX', {
-    style: 'currency',
-    currency: 'MXN',
-    minimumFractionDigits: 2
-  });
-}
-
-// ---------------------------------------------------------------------
-// Objetos
-// ---------------------------------------------------------------------
-
-/**
- * true si el objeto esta vacio o no tiene propiedades con valor.
- *
- *   {}                 -> true
- *   { nombre: "Ana" }  -> false
- *   null               -> true
- *
- * Se usa para rechazar PUT sin cambios.
- *
- * @param {*} obj
+ * @param {boolean} valorPorDefecto
  * @returns {boolean}
  */
-function estaVacio(obj) {
-  if (obj === null || obj === undefined) return true;
-  if (typeof obj !== 'object') return false;
+function aBanderaEntera(valor, valorPorDefecto = false) {
+  if (typeof valor === 'boolean') return valor;
 
-  return Object.keys(obj).length === 0;
+  const texto = String(valor ?? '').trim().toLowerCase();
+
+  if (['true', '1', 'si', 'sí', 'yes', 'on'].includes(texto)) return true;
+  if (['false', '0', 'no', 'off'].includes(texto)) return false;
+
+  return valorPorDefecto;
 }
 
 /**
- * LISTA BLANCA de campos: descarta cualquier propiedad que no este
- * en `camposPermitidos`.
+ * Devuelve SOLO las llaves de `origen` que estan permitidas.
  *
- *   Esto impide que un cliente malicioso mande { "id_rol": 1 } o
- *   campos internos que no deberia controlar.
+ * POR QUE ES DEFENSA Y NO COMODIDAD?
+ * El cuerpo de una peticion lo escribe CUALQUIERA. Si al service le
+ * llegara `{"nombre":"x", "id_rol": 5, "fecha_creacion": "..."}` y se
+ * pasara tal cual al UPDATE, un cliente podria cambiar campos que no
+ * deberia (por ejemplo su propio rol). Filtrando aqui, lo que no este
+ * en la lista simplemente se ignora.
  *
- * Solo incluye las propiedades que REALMENTE llegaron (Object.hasOwn),
- * por eso sirve tambien para actualizaciones parciales.
- *
- * @param {object}   datos             req.body
- * @param {string[]} camposPermitidos  Lista blanca
- * @returns {object} Solo los campos permitidos que venian
+ * @param {object} origen
+ * @param {string[]} permitidas
+ * @returns {object}
  */
-function soloCamposPermitidos(datos, camposPermitidos) {
-  const resultado = {};
+function soloCamposPermitidos(origen, permitidas) {
+  if (origen === null || typeof origen !== 'object') return {};
 
-  if (datos === null || typeof datos !== 'object') {
-    return resultado;
-  }
+  const salida = {};
 
-  for (const campo of camposPermitidos) {
-    if (Object.hasOwn(datos, campo)) {
-      resultado[campo] = datos[campo];
+  for (const llave of permitidas) {
+    if (Object.prototype.hasOwnProperty.call(origen, llave)) {
+      salida[llave] = origen[llave];
     }
   }
 
-  return resultado;
+  return salida;
+}
+
+/**
+ * true si el valor no aporta nada: null, undefined, cadena vacia o
+ * solo espacios, o arreglo vacio.
+ *
+ * @param {*} valor
+ * @returns {boolean}
+ */
+function estaVacio(valor) {
+  if (valor === null || valor === undefined) return true;
+  if (typeof valor === 'string') return valor.trim() === '';
+  if (Array.isArray(valor)) return valor.length === 0;
+
+  return false;
+}
+
+/**
+ * Convierte la query string de paginacion en numeros sanos.
+ *
+ *   ?pagina=abc   -> pagina 1
+ *   ?pagina=0     -> pagina 1
+ *   ?limite=9999  -> limite 100   (tope duro, para no tumbar la base)
+ *   no viene nada  -> 1 y 20
+ *
+ * POR QUE NORMALIZAR AQUI?
+ * Porque `req.query` trae TODO como texto y lo escribe cualquiera.
+ * Interpolar `LIMIT ${req.query.limite}` en SQL seria una inyeccion
+ * directa. Con esta funcion lo unico que llega al SQL es un entero ya
+ * recortado dentro del rango permitido.
+ *
+ * @param {object} filtros  Tipicamente req.query
+ * @param {number} defectoLimite
+ * @param {number} maximoLimite
+ * @returns {{pagina:number, limite:number, desplazamiento:number}}
+ */
+function normalizarPaginacion(filtros = {}, defectoLimite = 20, maximoLimite = 100) {
+  const paginaBruta = Number.parseInt(filtros.pagina, 10);
+  const limiteBruto = Number.parseInt(filtros.limite, 10);
+
+  const pagina = Number.isNaN(paginaBruta) || paginaBruta < 1 ? 1 : paginaBruta;
+  const limite =
+    Number.isNaN(limiteBruto) || limiteBruto < 1
+      ? defectoLimite
+      : Math.min(limiteBruto, maximoLimite);
+
+  return {
+    pagina,
+    limite,
+    desplazamiento: (pagina - 1) * limite
+  };
 }
 
 module.exports = {
   limpiarTexto,
   aTituloPropio,
-  aMinusculas,
   aEnteroONulo,
-  aDecimalONulo,
-  aHoraONulo,
-  redondearDosDecimales,
-  aTextoMoneda,
+  aBanderaEntera,
+  soloCamposPermitidos,
   estaVacio,
-  soloCamposPermitidos
+  normalizarPaginacion
 };

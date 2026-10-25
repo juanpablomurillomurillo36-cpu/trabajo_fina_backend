@@ -1,29 +1,21 @@
 /**
  * src/routes/salud.routes.js
  * ---------------------------------------------------------------------
- * Definicion de rutas del health check.
+ * RUTAS de salud de la API.
  *
- * QUIEN DEFINE LAS RUTAS?
- *   Las rutas van en archivos, NO dentro de los controllers. La capa
- *   `routes` solo decide QUE endpoint existe y QUE controller lo
- *   atiende. No valida, no calcula, no escribe en la base.
- *
- * Estructura de una ruta:
- *   router.<metodo>('<camino>', [middlewares...], controlador.<metodo>)
- *
- * Los middlewares entre el camino y el controller son OPCIONALES y se
- * usan para validar parametros de la URL (middleware/validarParametros)
- * o exigir autenticacion (fases posteriores).
+ * TABLA DE ENDPOINTS
+ * ---------------------------------------------------------------------
+ * GET /api/salud   Estado de la API y de la base de datos
+ * ---------------------------------------------------------------------
  */
 
-const { Router } = require('express');
-const controlador = require('../controllers/salud.controller');
+const express = require('express');
 
-// Router() crea un "subconjunto" de rutas que despues se monta en
-// config/express.js con app.use('/api/salud', ...).
-const router = Router();
+const saludController = require('../controllers/salud.controller');
 
-// GET /api/salud  ->  consulta general del servicio
-router.get('/', controlador.verificar);
+const router = express.Router();
+
+// GET /api/salud
+router.get('/', saludController.verificar);
 
 module.exports = router;

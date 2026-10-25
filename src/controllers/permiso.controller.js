@@ -3,180 +3,139 @@
  * ---------------------------------------------------------------------
  * CAPA DE CONTROLADOR de la entidad Permiso.
  *
- * SU UNICA RESPONSABILIDAD: traducir entre HTTP y el servicio.
+ * Traduce entre HTTP y el service; nada mas. No hay SQL, ni reglas de
+ * negocio, ni calculos: si los hay, estan en la capa equivocada.
  *
- *   ENTRADA : saca los datos de req (params, query, body).
- *   DELEGA  : llama al service, que es quien sabe las reglas.
- *   SALIDA  : arma la respuesta HTTP con el codigo correcto.
+ * MANEJO DE ERRORES: CADA METODO TRA SU PROPIO try/catch y hace
+ * `next(error)` para que el middleware manejadorErrores decida el
+ * codigo HTTP, el mensaje y el log.
  *
- * REGLA PARA RECONOCER UN CONTROLADOR BIEN HECHO:
- * No debe contener NI UNA consulta SQL, NI UNA validacion de negocio,
- * NI UN calculo. Si ves un `SELECT` o un `if (nombre === '')` aqui,
- * esa logica esta en la capa equivocada.
- *
- * Cada metodo se envuelve en capturarAsync: si el service lanza un
- * AppError (400, 404, 409...), el error viaja solo hasta el manejador
- * central. POR ESO NO HAY NI UN try/catch EN ESTE ARCHIVO.
- *
- * DE DONDE SALEN LOS DATOS DE LA PETICION?
- *   req.params -> de la ruta        /api/permisos/7     -> { id: '7' }
- *   req.query  -> de la query       ?pagina=2&estado=activo
- *   req.body   -> del cuerpo JSON   { "nombrePermiso": ... }
- *
- * OJO: req.params y req.query SIEMPRE traen TEXTO. El middleware
- * validarIdNumerico ya dejo el id convertido en req.idsValidados.
+ * TABLA DE ENDPOINTS QUE ATENDER
+ * ---------------------------------------------------------------------
+ * GET    /api/permisos              Listado con filtros y paginacion
+ * GET    /api/permisos/:id          Detalle
+ * POST   /api/permisos              Crear (201 + Location)
+ * PUT    /api/permisos/:id          Actualizar (parcial)
+ * PATCH  /api/permisos/:id/estado   Cambiar estado
+ * DELETE /api/permisos/:id          Eliminar
+ * ---------------------------------------------------------------------
  */
 
 const permisoService = require('../services/permiso.service');
-const bitacoraService = require('../services/bitacora.service');
 const respuesta = require('../utils/respuesta');
 const MENSAJES = require('../utils/mensajes');
-const { ACCION_BITACORA } = require('../utils/constants');
-const { capturarAsync } = require('../middleware/errorHandler');
 
 class PermisoController {
   /**
    * GET /api/permisos
-   * Lista permisos con filtros y paginacion.
-   *
-   * Query admitida: ?pagina=1&limite=20&estado=activo&busqueda=roles
+   * ?estado=activo&busqueda=roles&pagina=1&limite=20
    */
-  listar = capturarAsync(async (req, res) => {
-    // Le pasamos la query completa al service; el decide que usar.
-    const { permisos, total, pagina, limite } = await permisoService.listar(req.query);
+  listar = async (req, res, next) => {
+    try {
+      const { permisos, total, pagina, limite } = await permisoService.listar(req.query);
 
-    return respuesta.exito(res, {
-      mensaje: MENSAJES.EXITO.LISTA('permisos'),
-
-      // permisos es un arreglo de objetos Permiso. Al serializar,
-      // JSON.stringify llama al toJSON() de cada uno automatico.
-      datos: permisos,
-
-      meta: respuesta.construirMeta({
-        total,
-        pagina,
-        limite,
-        devueltos: permisos.length
-      })
-    });
-  });
+      return respuesta.exito(res, {
+        mensaje: MENSAJES.EXITO.RECURSO_LISTADO,
+        datos: permisos,
+        meta: respuesta.construirMeta({ total, pagina, limite, devueltos: permisos.length })
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   /**
    * GET /api/permisos/:id
-   * Devuelve un permiso.
    */
-  obtener = capturarAsync(async (req, res) => {
-    // El id ya viene validado y convertido a numero por el middleware.
-    const id = req.idsValidados.id;
+  obtener = async (req, res, next) => {
+    try {
+      const id = req.idsValidados.id;
 
-    const permiso = await permisoService.obtenerPorId(id);
+      const permiso = await permisoService.obtenerPorId(id);
 
-    return respuesta.exito(res, {
-      mensaje: MENSAJES.EXITO.DETALLE('Permiso'),
-      datos: permiso
-    });
-  });
+      return respuesta.exito(res, {
+        mensaje: MENSAJES.EXITO.RECURSO_OBTENIDO,
+        datos: permiso
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   /**
-   * POST /api/permisos
-   * Crea un permiso nuevo.
-   *
-   * Responde 201 Created y no 200: es el codigo correcto cuando la
-   * peticion crea un recurso nuevo en el servidor.
+   * POST /api/permisos  -> 201 Created + cabecera Location
    */
-  crear = capturarAsync(async (req, res) => {
-    const permiso = await permisoService.crear(req.body);
+  crear = async (req, res, next) => {
+    try {
+      const permiso = await permisoService.crear(req.body);
 
-    await bitacoraService.registrarDesdeReq(req, {
-      tabla: 'permisos',
-      accion: ACCION_BITACORA.CREACION,
-      idRegistro: permiso.id,
-      detalle: `Permiso "${permiso.nombrePermiso}" creado`
-    });
+      res.set('Location', `/api/permisos/${permiso.id}`);
 
-    // Cabecera Location: le dice al cliente en que URL quedo el
-    // recurso recien creado. Es parte del estandar REST (C4).
-    res.set('Location', `/api/permisos/${permiso.id}`);
-
-    return respuesta.creado(res, {
-      mensaje: MENSAJES.EXITO.CREADO('Permiso'),
-      datos: permiso
-    });
-  });
+      return respuesta.creado(res, {
+        mensaje: MENSAJES.EXITO.RECURSO_CREADO,
+        datos: permiso
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   /**
-   * PUT /api/permisos/:id
-   * Actualiza un permiso (tambien admite campos parciales).
+   * PUT /api/permisos/:id  -> actualizacion parcial
    */
-  actualizar = capturarAsync(async (req, res) => {
-    const id = req.idsValidados.id;
+  actualizar = async (req, res, next) => {
+    try {
+      const id = req.idsValidados.id;
 
-    const permiso = await permisoService.actualizar(id, req.body);
+      const permiso = await permisoService.actualizar(id, req.body);
 
-    await bitacoraService.registrarDesdeReq(req, {
-      tabla: 'permisos',
-      accion: ACCION_BITACORA.EDICION,
-      idRegistro: permiso.id,
-      detalle: `Permiso "${permiso.nombrePermiso}" actualizado`
-    });
-
-    return respuesta.exito(res, {
-      mensaje: MENSAJES.EXITO.ACTUALIZADO('Permiso'),
-      datos: permiso
-    });
-  });
+      return respuesta.exito(res, {
+        mensaje: MENSAJES.EXITO.RECURSO_ACTUALIZADO,
+        datos: permiso
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   /**
-   * PATCH /api/permisos/:id/estado
-   * Cambia unicamente el estado (activo / inactivo).
-   *
-   * Se usa PATCH y no PUT porque la operacion modifica UNA parte del
-   * recurso, no todo. Esa es la diferencia entre ambos verbos.
+   * PATCH /api/permisos/:id/estado  { "estado": "inactivo" }
    */
-  cambiarEstado = capturarAsync(async (req, res) => {
-    const id = req.idsValidados.id;
+  cambiarEstado = async (req, res, next) => {
+    try {
+      const id = req.idsValidados.id;
+      const { estado } = req.body;
 
-    const permiso = await permisoService.cambiarEstado(id, req.body);
+      const permiso = await permisoService.cambiarEstado(id, estado);
 
-    await bitacoraService.registrarDesdeReq(req, {
-      tabla: 'permisos',
-      accion: ACCION_BITACORA.EDICION,
-      idRegistro: permiso.id,
-      detalle: `Estado del permiso "${permiso.nombrePermiso}": ahora "${permiso.estado}"`
-    });
-
-    return respuesta.exito(res, {
-      mensaje: MENSAJES.EXITO.OPERACION_REALIZADA('Cambio de estado'),
-      datos: permiso
-    });
-  });
+      return respuesta.exito(res, {
+        mensaje: MENSAJES.EXITO.RECURSO_ESTADO_ACTUALIZADO,
+        datos: permiso
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   /**
    * DELETE /api/permisos/:id
-   * Elimina el permiso si no esta asignado a ningun rol.
-   *
-   * Devolvemos 200 con un resumen en lugar de 204 (sin contenido),
-   * porque al usuario le sirve VER que se borro.
+   * Devuelve 200 con un resumen, en vez de 204 sin contenido, para
+   * que en las pruebas se pueda VER que efectivamente borro.
    */
-  eliminar = capturarAsync(async (req, res) => {
-    const id = req.idsValidados.id;
+  eliminar = async (req, res, next) => {
+    try {
+      const id = req.idsValidados.id;
 
-    const resumen = await permisoService.eliminar(id);
+      const resumen = await permisoService.eliminar(id);
 
-    await bitacoraService.registrarDesdeReq(req, {
-      tabla: 'permisos',
-      accion: ACCION_BITACORA.ANULACION,
-      idRegistro: resumen.id,
-      detalle: `Permiso "${resumen.nombrePermiso}" eliminado`
-    });
-
-    return respuesta.exito(res, {
-      mensaje: MENSAJES.EXITO.ELIMINADO('Permiso'),
-      datos: resumen
-    });
-  });
+      return respuesta.exito(res, {
+        mensaje: MENSAJES.EXITO.RECURSO_ELIMINADO,
+        datos: resumen
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
-// SINGLETON: el controller se exporta como instancia, igual que el
-// service y el repository.
 module.exports = new PermisoController();

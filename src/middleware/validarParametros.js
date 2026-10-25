@@ -1,133 +1,123 @@
 /**
  * src/middleware/validarParametros.js
  * ---------------------------------------------------------------------
- * Middlewares que validan los PARAMETROS de la peticion ANTES de que
+ * Middlewares que validan la URL y el cuerpo ANTES de que la peticion
  * llegue al controlador.
  *
- * POR QUE VALIDAR AQUI Y NO EN EL SERVICE?
+ * POR QUE VALIDAR AQUI Y NO EN EL CONTROLADOR?
+ * Porque es una validacion de FORMATO, no de negocio. Si alguien pide
  *
- *   req.params y req.query SIEMPRE llegan como TEXTO, incluso cuando
- *   la ruta dice /:id. Es decir, en `GET /api/roles/abc` el `id` vale
- *   la cadena "abc", no un numero.
+ *     GET /api/roles/abc
  *
- *   Si validamos en el middleware:
- *      - el service recibe SIEMPRE tipos correctos (numeros, listos);
- *      - el controlador no tiene que repetir la comprobacion;
- *      - un error de formato se responde antes de tocar la base.
+ * no tiene sentido abrir una conexion a MySQL: rechazamos de
+ * inmediato con 400 y ahorramos trabajo al servidor.
  *
- * DIFERENCIA CON validadores.js
- *   Aqui  -> parametros de URL y query (llegan de la ruta).
- *   Alli  -> cuerpo JSON y reglas de negocio (llegan de req.body).
+ * Esto se llama "fail fast": fallar lo antes posible, lo mas cerca
+ * posible de donde entra el dato malo.
  */
 
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
-const formato = require('../utils/formato');
 
 /**
- * Crea un middleware que valida uno o varios parametros numericos de
- * la ruta.
+ * Comprueba que un texto sea un numero entero estrictamente positivo.
+ *
+ * "7"    -> true
+ * "7.5"  -> false
+ * " 7 "  -> true (se recorta antes)
+ * "-1"   -> false
+ * "abc"  -> false
+ *
+ * @param {*} valor
+ * @returns {boolean}
+ */
+function esEnteroPositivo(valor) {
+  if (typeof valor === 'number') {
+    return Number.isInteger(valor) && valor > 0;
+  }
+
+  if (typeof valor !== 'string') return false;
+
+  const texto = valor.trim();
+  if (texto === '') return false;
+
+  // Se acepta solo un signo menos opcional y digitos: nada de "1e5",
+  // nada de "0x10", nada de espacios intermedios.
+  if (!/^-?\d+$/.test(texto)) return false;
+
+  return Number.parseInt(texto, 10) > 0;
+}
+
+/**
+ * FABRICA DE MIDDLEWARES.
+ *
+ * Esta funcion NO es el middleware: es una funcion que DEVUELVE un
+ * middleware. Ese patron se llama "closure" y permite configurar el
+ * middleware al registrarlo:
  *
  *   router.get('/:id', validarIdNumerico('id'), controlador.obtener);
+ *   router.delete('/:id/permisos/:idPermiso',
+ *     validarIdNumerico('id'),
+ *     validarIdNumerico('idPermiso'),
+ *     controlador.quitarPermiso);
  *
- * El resultado GUARDADO en req.idsValidados.id ya es un NUMERO, asi
- * que el controlador no tiene que convertir nada:
- *
- *   const id = req.idsValidados.id;   // ya es 7, no "7"
- *
- * @param {...string} nombres  Nombres de los parametros a validar
- * @returns {function} Middleware de Express
+ * @param {string} nombreParametro  Nombre del parametro en la ruta.
+ * @returns {function} Middleware de Express.
  */
-function validarIdNumerico(...nombres) {
+function validarIdNumerico(nombreParametro = 'id') {
   return function (req, res, next) {
-    const validados = {};
+    // req.params contiene los parametros de la ruta (:id -> req.params.id)
+    const valor = req.params[nombreParametro];
 
-    for (const nombre of nombres) {
-      const valor = req.params[nombre];
-      const numero = formato.aEnteroONulo(valor);
+    if (!esEnteroPositivo(valor)) {
+      const mensaje = `El parametro "${nombreParametro}" debe ser un numero entero positivo`;
 
-      // Si no era numero positivo, no tiene sentido seguir.
-      if (numero === null || numero <= 0) {
-        return next(
-          AppError.validacion(MENSAJES.VALIDACION.PARAMETRO_INVALIDO(nombre), [
-            { campo: nombre, mensaje: MENSAJES.VALIDACION.ID_INVALIDO(nombre) }
-          ])
-        );
-      }
-
-      validados[nombre] = numero;
+      // Pasamos el error al middleware manejadorErrores. No respondemos
+      // aqui: un middleware que responde rompe la cadena y complica
+      // el registro centralizado de errores.
+      return next(
+        AppError.validacion(mensaje, [{ campo: nombreParametro, mensaje }])
+      );
     }
 
-    // Adjuntamos los valores ya convertidos en un objeto aparte.
-    req.idsValidados = validados;
+    // Convertimos el texto "7" al numero 7 y lo dejamos disponible en
+    // req.idsValidados, para que el controlador no repita la conversion
+    // ni tenga que acordarse de usar parseInt.
+    if (!req.idsValidados) {
+      req.idsValidados = {};
+    }
+    req.idsValidados[nombreParametro] = Number.parseInt(valor, 10);
 
-    return next();
+    next();
   };
 }
 
 /**
- * Middleware que rechaza peticiones sin cuerpo JSON.
+ * Rechaza las peticiones con el cuerpo vacio.
  *
- *   router.post('/', exigirCuerpo, controlador.crear);
+ * Se usa en POST y PUT, donde enviar {} casi siempre es un error del
+ * cliente: o olvido la cabecera Content-Type (y Express dejo req.body
+ * vacio), o mando un objeto sin ningun campo.
  *
- * Sin esto, `POST /api/roles` con el cuerpo vacio pasaria al service
- * y el error que saldria seria confuso ("el campo nombre es
- * obligatorio" cuando no vino NADA). Aqui el mensaje es claro desde
- * el principio.
- *
- * @param {object} req
- * @param {object} res
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
  * @param {function} next
  */
 function exigirCuerpo(req, res, next) {
   const cuerpo = req.body;
 
   const estaVacio =
-    cuerpo === undefined ||
     cuerpo === null ||
-    (typeof cuerpo === 'object' && Object.keys(cuerpo).length === 0);
+    cuerpo === undefined ||
+    typeof cuerpo !== 'object' ||
+    Array.isArray(cuerpo) ||
+    Object.keys(cuerpo).length === 0;
 
   if (estaVacio) {
-    return next(AppError.validacion(MENSAJES.VALIDACION.CORPUS_VACIO));
+    return next(AppError.cuerpoInvalido(MENSAJES.VALIDACION.CUERPO_VACIO));
   }
 
-  return next();
+  next();
 }
 
-/**
- * Middleware que normaliza los parametros de PAGINACION de la query.
- *
- *   GET /api/roles?pagina=3&limite=50  ->  req.paginacion = { pagina: 3, limite: 50 }
- *
- * Valores por defecto y tope de seguridad:
- *   - pagina minima 1 (no existen paginas 0 o negativas);
- *   - limite tope LIMITES.LIMITE_MAXIMO, para que nadie pueda tumbar
- *     la API pidiendo un millon de filas de golpe.
- *
- * Si el cliente manda texto raro ("pagina=abc"), se usa el valor por
- * defecto en vez de responder un error: la paginacion es una ayuda,
- * no un dato critico.
- *
- * @param {object} req
- * @param {object} res
- * @param {function} next
- */
-function validarPaginacion(req, res, next) {
-  const { LIMITES } = require('../utils/constants');
-
-  const pagina = formato.aEnteroONulo(req.query.pagina);
-  const limite = formato.aEnteroONulo(req.query.limite);
-
-  req.paginacion = {
-    pagina: Math.max(1, pagina ?? LIMITES.PAGINA_DEFECTO),
-    limite: Math.min(Math.max(1, limite ?? LIMITES.LIMITE_DEFECTO), LIMITES.LIMITE_MAXIMO)
-  };
-
-  return next();
-}
-
-module.exports = {
-  validarIdNumerico,
-  exigirCuerpo,
-  validarPaginacion
-};
+module.exports = { validarIdNumerico, exigirCuerpo, esEnteroPositivo };

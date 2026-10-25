@@ -1,35 +1,32 @@
 {
   "name": "discoteca-api",
   "version": "1.0.0",
-  "description": "API REST para gestionar el control de acceso, inventario, reservas, eventos y ventas de una discoteca.",
+  "description": "API REST de la discoteca - Node.js + Express + MySQL (fase: infraestructura, roles, permisos y usuarios)",
   "main": "src/index.js",
-  "type": "commonjs",
+  "directories": {
+    "doc": "docs"
+  },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "test": "node --test",
-    "test:e2e": "node tests/e2e-corrida-global.js",
-    "db:schema": "mysql -u root -p < database/01_schema.sql",
-    "db:user": "mysql -u root -p < database/02_usuario_app.sql",
-    "db:seed": "mysql -u root -p discoteca_api < database/03_seed.sql"
+    "dev": "node --watch src/index.js"
   },
-  "keywords": [
-    "api-rest",
-    "express",
-    "mysql",
-    "poo",
-    "discoteca",
-    "sena"
-  ],
-  "author": "SENA - Ficha 3489088",
-  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juanpablomurillomurillo36-cpu/trabajo_fina_backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/juanpablomurillomurillo36-cpu/trabajo_fina_backend/issues"
+  },
+  "homepage": "https://github.com/juanpablomurillomurillo36-cpu/trabajo_fina_backend#readme",
   "dependencies": {
-    "bcryptjs": "^3.0.2",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
-    "dotenv": "^18.0.7",
+    "dotenv": "^18.0.9",
     "express": "^5.3.0",
-    "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.24.5",
-    "qrcode": "^1.5.4"
+    "mysql2": "^3.24.6"
   }
 }

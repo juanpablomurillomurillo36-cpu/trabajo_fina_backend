@@ -1,370 +1,821 @@
-# API REST — DISCOTECA (Evidencia 2)
+# discoteca-api
 
-> **Ficha 3489088 · Proyecto Discoteca · Backend Node.js + Express + MySQL**
-> Versión entregable: tag `v1.0-evidencia2`.
+API REST del sistema de gestión de una discoteca. Construida con **Node.js + Express + MySQL**,
+siguiendo la arquitectura en capas `rutas → controladores → services → modelos → base de datos`.
 
-API REST que digitaliza la operación diaria de una discoteca: control de acceso
-por QR, reservas con detección de conflicto, compras con transacción de stock,
-eventos con ficha técnica, ventas con IVA y comprobante, programa de puntos y
-reportes de desempeño.
+> **Fase actual:** infraestructura base + entidades **Rol**, **Permiso** y **Usuario**,
+> con CRUD completo y sin autenticación (el JWT entra en una fase posterior).
+
+---
+
+## Índice
+
+1. [Requisitos previos](#1-requisitos-previos)
+2. [Paso 1 — Inicializar el proyecto](#2-paso-1--inicializar-el-proyecto)
+3. [Paso 2 — Archivos de configuración del repositorio](#3-paso-2--archivos-de-configuración-del-repositorio)
+4. [Paso 3 — Configuración (`src/config`)](#4-paso-3--configuración-srcconfig)
+5. [Paso 4 — Utilidades (`src/utils`)](#5-paso-4--utilidades-srcutils)
+6. [Paso 5 — Middleware (`src/middleware`)](#6-paso-5--middleware-srcmiddleware)
+7. [Paso 6 — Arranque y punto de salud](#7-paso-6--arranque-y-punto-de-salud)
+8. [Paso 7 — Entidad Rol + asignación de permisos](#8-paso-7--entidad-rol--asignación-de-permisos)
+9. [Paso 8 — Entidad Permiso](#9-paso-8--entidad-permiso)
+10. [Paso 9 — Entidad Usuario](#10-paso-9--entidad-usuario)
+11. [Paso 10 — Pruebas con `curl`](#11-paso-10--pruebas-con-curl)
+12. [Paso 10b — Pruebas manuales en Postman (22 requests)](#12-paso-10b--pruebas-manuales-en-postman-22-requests)
+13. [Paso 11 — Códigos de error de la API](#13-paso-11--códigos-de-error-de-la-api)
+14. [Estructura final del proyecto](#14-estructura-final-del-proyecto)
 
 ---
 
 ## 1. Requisitos previos
 
-### Software que hay que instalar en el computador
-
-| Software | Versión | Cómo verificarlo (terminal) | Observación |
-|---|---|---|---|
-| **Node.js** | 18 o superior (probado con Node 24) | `node --version` y `npm --version` | **npm viene incluido con Node.js**: no se instala "npm" por separado. |
-| **MySQL Server** | 8 | `mysql --version` | Al instalar se define la clave del usuario `root`. Debe quedar corriendo en `localhost:3306`. |
-| **Git** (opcional) | cualquiera | `git --version` | Solo si quieres usar **Git Bash** como terminal. |
-| **Postman** (opcional) | cualquiera | — | Para importar la colección de pruebas (sección 8). |
-
-Comprobar que MySQL esté corriendo (**Terminal de Windows**, como
-administrador; el servicio suele llamarse `MySQL80`):
-
-```powershell
-net start MySQL80
-```
-
-### Terminales usadas en esta guía
-
-| Etiqueta de la guía | Cómo abrir | Características |
+| Requisito | Versión mínima | Cómo verificarlo |
 |---|---|---|
-| **Terminal de Windows** | `Windows + X` → *Terminal* (PowerShell) o *Símbolo del sistema* (CMD) | Comandos de Windows: `cd`, `copy`, `dir` |
-| **Git Bash** | Menú inicio → *Git Bash* (se instala junto con Git) | Comandos estilo Linux: `cp`, `ls`, y la redirección `<` de archivos |
-
-> Los scripts de `npm` (`npm install`, `npm start`, `npm test`, `npm run
-> db:*`) funcionan **igual en las dos terminales**. La diferencia está en los
-> comandos de Windows/Linux y en la redirección `<` de los archivos `.sql`
-> (ver paso 2.5).
-
-### Dependencias npm del proyecto
-
-No hay que instalar paquetes npm a mano ni con `-g` (globales). Todas las
-librerías que usa la API (`express`, `mysql2`, `dotenv`, `cors`, `bcryptjs`,
-`jsonwebtoken`, `qrcode`) están declaradas en `package.json` y se instalan
-automáticamente en el paso 2.2 con `npm install`.
-
-## 2. Puesta en marcha (paso a paso)
-
-> **Antes que nada:** todos los comandos de `npm` se ejecutan **dentro de la
-> carpeta `discoteca-api`** (la que contiene `package.json`). Si te aparece
-> el error `ENOENT: ... package.json`, es que estás parado en la carpeta
-> equivocada.
-
-### 2.1 Entrar a la carpeta del proyecto
-
-**Terminal de Windows (PowerShell o CMD):**
-
-```powershell
-cd "C:\Users\TU_USUARIO\Desktop\TRABAJO-FINAL-SENA\Backend-proyecto discoteca\discoteca-api"
-dir
-```
-
-**Git Bash:**
+| Node.js | 18 (probado con 24.20.0) | `node -v` |
+| npm | 9 (probado con 11.19.0) | `npm -v` |
+| MySQL Server | 8.0 | `mysql --version` |
 
 ```bash
-cd "/c/Users/TU_USUARIO/Desktop/TRABAJO-FINAL-SENA/Backend-proyecto discoteca/discoteca-api"
-ls
+node -v
+npm -v
+mysql --version
 ```
 
-En la lista deben aparecer `package.json`, `src`, `database` y
-`.env.example`.
+La base de datos `discoteca_api` ya viene creada y sembrada con los scripts de
+`database/` (27 tablas, roles 5/6/7, 19 permisos y usuarios de prueba).
 
-### 2.2 Instalar las dependencias del proyecto
+**Usuario de aplicación** (mínimo privilegio, creado por `database/02_usuario_app.sql`):
 
-**Terminal de Windows o Git Bash (mismo comando):**
+```
+usuario:  discoteca_app
+clave:    DiscotecaApp2026
+base:     discoteca_api
+```
+
+---
+
+## 2. Paso 1 — Inicializar el proyecto
 
 ```bash
-npm install
+cd "C:\Users\venus\Desktop\TRABAJO-FINAL-SENA\Backend-proyecto discoteca\discoteca-api"
+npm init -y
+npm pkg set name=discoteca-api
+npm pkg set main=src/index.js
+npm pkg set type=commonjs
+npm pkg set scripts.start="node src/index.js"
+npm pkg set scripts.dev="node --watch src/index.js"
+npm install express cors mysql2 dotenv bcryptjs
 ```
 
-Esto lee `package.json` y crea la carpeta `node_modules/`. Solo se ejecuta
-una vez (o cuando cambian las dependencias).
+**Qué instala cada paquete y por qué:**
 
-### 2.3 Crear el archivo de configuración `.env`
-
-**Terminal de Windows (PowerShell o CMD):**
-
-```powershell
-copy .env.example .env
-```
-
-**Git Bash:**
-
-```bash
-cp .env.example .env
-```
-
-Si MySQL y el proyecto usan los valores por defecto, **no hace falta editar
-nada**; opcionalmente cambia `JWT_SECRETO` por un texto propio. Importante:
-el `.env` guarda el usuario de la **APLICACIÓN** (`discoteca_app`), nunca
-`root` ni el administrador creado en el paso 2.4.
-
-### 2.4 Crear la base de datos y un usuario administrador en MySQL
-
-1. Abrir una terminal y entrar a MySQL con `root` (la clave que definiste
-   al instalar MySQL):
-
-**Terminal de Windows o Git Bash (mismo comando):**
-
-```bash
-mysql -u root -p
-```
-
-2. Dentro de la consola de MySQL, crear la base de datos del proyecto y un
-   usuario con permisos de administrador:
-
-```sql
--- Base de datos del proyecto
-CREATE DATABASE IF NOT EXISTS discoteca_api
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci;
-
--- Usuario con permisos de ADMINISTRADOR.
--- Los privilegios sobre *.* (globales) son necesarios para que pueda
--- correr los scripts de la carpeta database/: crear la base, las tablas
--- y el usuario de aplicación (CREATE USER / GRANT).
-CREATE USER IF NOT EXISTS 'discoteca_admin'@'localhost'
-  IDENTIFIED BY 'DiscotecaAdmin2026';
-
-GRANT ALL PRIVILEGES ON *.*
-  TO 'discoteca_admin'@'localhost'
-  WITH GRANT OPTION;
-
-FLUSH PRIVILEGES;
-
--- Verificación
-SHOW GRANTS FOR 'discoteca_admin'@'localhost';
-EXIT;
-```
-
-> Si prefieres, puedes saltarte este usuario y usar `root` directamente en
-> los pasos siguientes: `root` también tiene permisos de administrador.
-
-### 2.5 Cargar tablas, usuario de aplicación y datos de prueba
-
-Los archivos `.sql` están en la carpeta `database/`. **La redirección `<`
-NO funciona en PowerShell**, así que estos comandos se ejecutan en **Git
-Bash** (o en CMD si usas Windows):
-
-**Git Bash (o Terminal CMD):**
-
-```bash
-# 1) Crea las 26 tablas de la base discoteca_api
-mysql -u discoteca_admin -p < database/01_schema.sql
-
-# 2) Crea el usuario de mínimo privilegio que usa la API (discoteca_app)
-mysql -u discoteca_admin -p < database/02_usuario_app.sql
-
-# 3) Datos de prueba: roles, usuarios, clientes, productos, eventos, etc.
-mysql -u discoteca_admin -p discoteca_api < database/03_seed.sql
-```
-
-Cada comando pide la contraseña del administrador
-(`DiscotecaAdmin2026`).
-
-**Alternativa con `root` desde cualquier terminal** (los scripts de npm ya
-traen los comandos anteriores escritos):
-
-```bash
-npm run db:schema   # mysql -u root -p < database/01_schema.sql
-npm run db:user     # mysql -u root -p < database/02_usuario_app.sql
-npm run db:seed     # mysql -u root -p discoteca_api < database/03_seed.sql
-```
-
-> Si la terminal responde `mysql no se reconoce`, añade la carpeta `bin` de
-> MySQL al **PATH** o escribe la ruta completa del ejecutable, por ejemplo:
-> `"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u discoteca_admin -p < database/01_schema.sql`
-
-### 2.6 Arrancar el servidor
-
-**Terminal de Windows o Git Bash (mismo comando):**
-
-```bash
-npm start
-```
-
-(O `npm run dev` para que el servidor se reinicie solo al guardar cambios.)
-
-Salud del servidor: `GET http://localhost:3000/api/salud`
-(abrirla en el navegador o en Postman).
-
-### Credenciales del seed
-
-| Rol | Email | Contraseña |
-|---|---|---|
-| Administrador | `admin@correo.mx` | `Admin1234` |
-| Empleado | `empleado@correo.mx` | `Empleado1234` |
-| Cliente | `cliente@correo.mx` | `Cliente1234` |
-
-> En `NODE_ENV=development`, `POST /api/auth/recuperar-password` devuelve el
-> código de verificación en la respuesta para poder encadenar el restablecer
-> en Postman o en pruebas.
-
-## 3. Variables de entorno (`.env`)
-
-| Variable | Descripción |
+| Paquete | Para qué |
 |---|---|
-| `PUERTO` | Puerto del servidor (3000) |
-| `DB_HOST`, `DB_PUERTO`, `DB_USUARIO`, `DB_CLAVE`, `DB_NOMBRE` | Conexión MySQL (usuario `discoteca_app` creado por `02_usuario_app.sql`) |
-| `DB_LIMITE_CONEXIONES` | Tamaño del pool (10) |
-| `ORIGENES_PERMITIDOS` | CORS: orígenes del frontend separados por coma |
-| `JWT_SECRETO`, `JWT_EXPIRACION` | Firma y vigencia del token (2h) |
-| `AFORO_MAXIMO` | Aforo del local (200): alerta al 90 %, bloqueo al 100 % |
-| `IVA_PORCENTAJE` | IVA de las ventas (16 %) |
+| `express` | Marco HTTP: rutas, middlewares y respuestas |
+| `cors` | Autoriza al frontend (otro origen) a llamar a la API |
+| `mysql2` | Driver de MySQL con *prepared statements* (previene inyección SQL) |
+| `dotenv` | Lee `src/.env` y lo copia a `process.env` |
+| `bcryptjs` | Hashea las contraseñas (puro JavaScript, sin compilar) |
 
-`.env` está en `.gitignore`; `.env.example` es la plantilla pública.
-
-## 4. Arquitectura (capas)
-
-```
-src/
-├── index.js              arranque (carga env, conecta, escucha)
-├── config/               env.js · database.js (pool) · express.js
-├── utils/                constants · AppError · respuesta · formato · fechas
-│                         mensajes · validadores (ColectorErrores) · cifrado · tokens
-├── middleware/           errorHandler (capturarAsync) · autenticacion · autorizacion
-│                         bitacora · validarParametros · logger
-├── models/               entidades con POO (#privados, toJSON, fábricas desdeFila)
-├── repositories/         SQL parametrizado + transacciones (sin lógica de negocio)
-├── services/             reglas de negocio (valida → normaliza → persiste)
-├── controllers/          HTTP: lee req, llama al service, responde con respuesta.js
-└── routes/               un archivo por módulo, montado en config/express.js
-```
-
-**Patrones aplicados:** Singleton (pool), `capturarAsync` (manejo de errores),
-`ColectorErrores` + `lanzarSiHay` (validación con `detalles[]` por campo),
-POST → `201` + `Location`, `PATCH /:id/estado`, composición en detalles
-(compras, reservas, ventas, fichas) y N:M roles↔permisos / ficha↔servicios.
-
-## 5. Contrato de respuestas (C4)
-
-Éxito:
+Resultado final de `package.json`:
 
 ```json
-{ "ok": true, "mensaje": "...", "datos": {}, "meta": {} }
+{
+  "name": "discoteca-api",
+  "version": "1.0.0",
+  "description": "API REST de la discoteca - Node.js + Express + MySQL (fase: infraestructura, roles, permisos y usuarios)",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  }
+}
 ```
 
-Error:
+---
 
-```json
-{ "ok": false, "error": { "codigo": "E-409", "mensaje": "...", "detalles": [] } }
+## 3. Paso 2 — Archivos de configuración del repositorio
+
+### 3.1 `.gitignore` (nuevo)
+
+Nunca se sube nada que contenga una contraseña ni algo reproducible con un comando.
+
+```gitignore
+node_modules/
+.env
+.env.local
+*.log
+*.pid
+.DS_Store
+.idea/
+.vscode/
 ```
 
-Códigos: `E-400` validación (con `detalles[{campo,mensaje}]`), `E-401` sin
-token, `E-403` sin permiso, `E-404` no existe, `E-409` conflicto de reglas,
-`E-500` inesperado (el mensaje técnico no se expone).
+### 3.2 `.env.example` (nuevo)
 
-## 6. Módulos y endpoints (resumen)
-
-| Módulo | Prefijo | Contenido |
-|---|---|---|
-| Salud | `GET /api/salud` | Liveness del servidor |
-| Permisos | `/api/permisos` | CRUD del catálogo de permisos |
-| Roles | `/api/roles` | CRUD + `GET/POST /:id/permisos` + `DELETE /:id/permisos/:idPermiso` (mínimo 1 permiso) |
-| Usuarios | `/api/usuarios` | CRUD + `PATCH /:id/estado` |
-| Auth | `/api/auth` | `login`, `logout`, `registro`, `GET/PUT mi-perfil`, `recuperar-password`, `restablecer-password` |
-| Proveedores | `/api/proveedores` | CRUD + estado (RFC único) |
-| Productos | `/api/productos` | CRUD + estado (stock mínimo/máximo) |
-| Servicios | `/api/servicios` | CRUD + estado |
-| Categorías | `/api/categorias-empleados`, `/api/categorias-clientes` | CRUD + estado |
-| Empleados | `/api/empleados` | CRUD + estado (NSS único, categoría activa) |
-| Clientes | `/api/clientes` | CRUD + estado (RFC único, `esVip`) |
-| Compras | `/api/compras` | CRUD + `/:id/confirmar` (suma stock) + `/:id/cancelar` |
-| Inventario | `/api/inventario/alertas` | Productos bajo el stock mínimo |
-| Agenda empleados | `/api/agenda` | Turnos empleado+servicio+fecha |
-| Reservas | `/api/reservas` | CRUD + `/:id/estado` + `/:id/qr` (conflicto de espacio/horario → 409) |
-| Ingresos | `/api/ingresos` | `POST /validar` (QR), `GET /aforo`, historial |
-| Eventos | `/api/eventos` | CRUD + `/:id/estado` + `/:id/ficha` (técnica 1:1 con servicios N:N) |
-| Agenda eventos | `/api/agenda-eventos` | Tareas por evento + estado |
-| Ventas | `/api/ventas` | CRUD + `/:id/estado` + `/:id/pagar` (IVA, comprobante, puntos) + `/:id/anular` |
-| Puntos | `/api/puntos/:idCliente` | Saldo y `POST /canjear` (máx. 50 % del acumulado) |
-| Reportes | `/api/reportes` | `top-clientes`, `servicios-solicitados`, `productos-menos-vendidos`, `ventas-por-mes`, `ventas-mayor-menor`, `ventas-subtotales`, `comparativo-eventos` |
-| Bitácora | `/api/bitacora` | Historial de creación/edición/anulación (admin) |
-
-La matriz completa RF → endpoint → fase → evidencia está en
-**`docs/TRAZABILIDAD.md`** (93 RF del SRS + 8 RNF + 3 RN).
-
-## 7. Pruebas
+Plantilla **sin secretos** que sí se sube a git. El real es `src/.env` y está ignorado.
 
 ```bash
-# Suite unitaria (node --test): utils, AppError y modelos — sin BD ni red
-npm test
-
-# Prueba global E2E: recorre la colección Postman COMPLETA contra el servidor
-# (requiere el servidor corriendo: npm start en otra terminal)
-npm run test:e2e
+copy .env.example src\.env     # y completar los valores reales
 ```
 
-Último resultado verificado:
+```env
+PUERTO=3000
+NODE_ENV=development
 
-| Prueba | Resultado |
+DB_HOST=localhost
+DB_PUERTO=3306
+DB_USUARIO=discoteca_app
+DB_CLAVE=tu_contraseña_real
+DB_NOMBRE=discoteca_api
+DB_LIMITE_CONEXIONES=10
+
+ORIGENES_PERMITIDOS=http://localhost:5500,http://127.0.0.1:5500,http://localhost:3000
+```
+
+---
+
+## 4. Paso 3 — Configuración (`src/config`)
+
+### 4.1 `src/config/env.js`
+
+Carga `.env` **una sola vez** y valida las variables obligatorias (*fail fast*): si falta
+`DB_CLAVE`, el servidor **no arranca** en vez de fallar después con un error confuso.
+
+```js
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+
+function obligatoria(nombre) {
+  const valor = process.env[nombre];
+  if (valor === undefined || String(valor).trim() === '') {
+    console.error(`\n[CONFIG] ${MENSAJES.SISTEMA.VARIABLE_ENTORNO_FALTANTE(nombre)}\n`);
+    process.exit(1);
+  }
+  return String(valor).trim();
+}
+
+const config = Object.freeze({
+  entorno: opcional('NODE_ENV', 'development'),
+  puerto: entera('PUERTO', 3000),
+  baseDatos: Object.freeze({
+    host: opcional('DB_HOST', 'localhost'),
+    puerto: entera('DB_PUERTO', 3306),
+    usuario: obligatoria('DB_USUARIO'),
+    clave: obligatoria('DB_CLAVE'),
+    nombre: obligatoria('DB_NOMBRE'),
+    limiteConexiones: entera('DB_LIMITE_CONEXIONES', 10)
+  }),
+  origenesPermitidos: lista('ORIGENES_PERMITIDOS', ['http://localhost:5500']),
+  get esDesarrollo() { return this.entorno === 'development'; },
+  get esProduccion() { return this.entorno === 'production'; }
+});
+```
+
+`Object.freeze` lo vuelve **inmutable**: nadie puede hacer `config.puerto = 9999` después
+de arrancar.
+
+### 4.2 `src/config/database.js`
+
+Clase `Database` con **pool de conexiones**, **singleton** y **consultas parametrizadas**.
+
+```js
+class Database {
+  #pool;              // privado: nadie desde afuera puede tocarlo
+  #estaConectada;
+
+  get pool() { if (this.#pool === null) this.#crearPool(); return this.#pool; }
+
+  async verificarConexion() { /* getConnection + ping + release */ }
+  async ejecutar(sql, parametros = []) { const [f] = await this.pool.execute(sql, parametros); return f; }
+  async obtenerUno(sql, parametros = []) { /* primera fila o null */ }
+  async conTransaccion(trabajo) { /* beginTransaction / commit / rollback */ }
+  async cerrar() { /* pool.end() */ }
+}
+
+module.exports = new Database();   // SINGLETON: una sola instancia
+```
+
+**La regla de oro:** nunca se concatena texto del cliente en SQL.
+
+```js
+// MAL   `SELECT * FROM roles WHERE id_rol = ${id}`
+// BIEN  'SELECT * FROM roles WHERE id_rol = ?'   +   [id]
+```
+
+### 4.3 `src/config/express.js`
+
+Crea la aplicación **sin arrancar el servidor** (eso permite probarla sin ocupar el puerto).
+El orden de los `app.use()` es crítico:
+
+```js
+function crearAplicacion() {
+  const app = express();
+  app.disable('x-powered-by');
+  app.use(cors({ origin: config.origenesPermitidos, exposedHeaders: ['Location'], ... }));
+  app.use(express.json({ limit: '100kb' }));
+  app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+  app.use(registrarPeticion);          // log
+  app.use('/api', rutas);              // rutas de la API
+  app.get('/', (req, res) => { ... }); // saludo
+  app.use(rutaNoEncontrada);           // 404
+  app.use(manejadorErrores);           // errores: SIEMPRE el ultimo
+  return app;
+}
+```
+
+---
+
+## 5. Paso 4 — Utilidades (`src/utils`)
+
+| Archivo | Qué aporta |
 |---|---|
-| `npm test` | 33 pruebas, 0 fallos |
-| `npm run test:e2e` | 135 peticiones, 213 afirmaciones, 0 fallos |
+| `constants.js` | Todos los valores `ENUM` de MySQL, límites y códigos HTTP |
+| `AppError.js` | Error con `status`, `codigo` y `detalles` + fábricas estáticas |
+| `respuesta.js` | El "sobre" `{ok, mensaje, datos, meta}` / `{ok:false, error:{...}}` |
+| `mensajes.js` | Todos los textos que van al cliente (español latinoamericano) |
+| `formato.js` | `limpiarTexto`, `soloCamposPermitidos`, `normalizarPaginacion`… |
+| `fechas.js` | Normaliza fechas a ISO (salida) y `Date` (entrada a MySQL) |
+| `validadores.js` | `ColectorErrores`: junta TODOS los errores y lanza una sola vez |
+| `cifrado.js` | `hashearPassword` / `verificarPassword` con bcrypt |
 
-La E2E usa un runner propio con shim mínimo de `pm.*` (sin dependencias
-externas), porque replica la semántica de la colección Postman sin necesidad
-de Newman.
+### 5.1 `constants.js`
 
-## 8. Colección Postman (C9)
+```js
+const ESTADO = Object.freeze({ ACTIVO: 'activo', INACTIVO: 'inactivo' });
 
-Archivo: **`docs/postman/Discoteca.postman_collection.json`** (133 peticiones).
+const CARGO_EMPLEADO = Object.freeze({
+  DJ: 'DJ', MESERO: 'mesero', INGRESO: 'ingreso', ADMINISTRATIVO: 'administrativo'
+});
 
-1. Importar el archivo en Postman (o usar la colección compartida).
-2. La variable global `base_url` apunta a `http://localhost:3000`.
-3. Ejecutar en orden la carpeta `01 Login y salud` primero: captura `{{token}}`
-   y las variables de ids (`usuarioLogueadoId`, `clienteCarlosId`, etc.).
-4. El resto de carpetas encadena los flujos: catálogos → compras → reservas →
-   ingresos → eventos → ventas → reportes → cierre (logout).
+const LIMITES = Object.freeze({
+  NOMBRE_ROL: 50, DESCRIPCION: 255, NOMBRE_PERMISO: 80,
+  NOMBRE_USUARIO: 60, CORREO: 120, TELEFONO: 20,
+  LIMITE_PAGINA: 100, LIMITE_DEFECTO: 20,
+  CONTRASENA_MIN: 8, CONTRASENA_MAX: 72
+});
 
-## 9. Base de datos
+const HTTP = Object.freeze({ OK: 200, CREADO: 201, BAD_REQUEST: 400,
+  NO_ENCONTRADO: 404, CONFLICTO: 409, ERROR_INTERNO: 500 });
+```
 
-26 tablas en el esquema `discoteca_api` (`database/01_schema.sql`), con:
+> **Importante:** `src/models/index.js` carga las 26 clases del modelo y varias
+> necesitan estos grupos (`ESTADO`, `ACCION_BITACORA`, `CARGO_EMPLEADO`,
+> `ESTADO_AGENDA`, `ESTADO_EVENTO`, `TIPO_EVENTO`, `ESTADO_INGRESO`,
+> `ESTADO_RESERVA`, `ESTADO_VENTA`, `METODO_PAGO`, `TIPO_ACCION_ACCESO`,
+> `RESULTADO_ACCESO`, `TIPO_NOTIFICACION`, `CANAL_NOTIFICACION`,
+> `ESTADO_NOTIFICACION`). Si falta uno, **la aplicación revienta en el primer `require`**.
 
-- `roles ↔ permisos` (N:M con PK compuesta), `usuarios → accesos`.
-- `evento → ficha_tecnica` (1:1) y `ficha_tecnica ↔ servicios` (N:N).
-- `categoria_empleado → empleados → agenda_empleados`.
-- `clientes ↔ categoria_clientes`, `ventas ↔ productos`, `compras ↔ productos`
-  con sus tablas de detalle (composición).
-- `reservas` con restricción única `uq_reserva_espacio_horario` (RN-02).
-- `bitacora` poblada por el middleware de trazabilidad.
+### 5.2 `AppError.js`
 
-`database/03_seed.sql` crea datos coherentes con la colección Postman y los
-diagramas UML (`docs/uml/`).
+```js
+class AppError extends Error {
+  #status; #codigo; #detalles;
 
-## 10. Decisiones y alcance honesto
+  static validacion(m, d = null)   { return new AppError(m, 400, 'VALIDACION', d); }
+  static cuerpoInvalido(m, d = null){ return new AppError(m, 400, 'CUERPO_INVALIDO', d); }
+  static noEncontrado(m)           { return new AppError(m, 404, 'NO_ENCONTRADO'); }
+  static conflicto(m, d = null)    { return new AppError(m, 409, 'CONFLICTO', d); }
+  static interno(m, causa = null)  { return new AppError(m, 500, 'INTERNO', null, causa); }
 
-- **Notificaciones simuladas** (RF-EVE-10/11, RF-VEN-15): se persisten en la
-  tabla `notificaciones` y se registran en log; no hay proveedor de correo/SMS
-  (TBD-02 del SRS).
-- **VIP** (RN-01): modelado como `esVip` en clientes + espacios de tipo VIP en
-  reservas; sin precio diferencial (alcance del backend de la Evidencia 2).
-- **Puntos** (RN-03): 1 punto por cada $10 pagados; canje máximo del 50 % del
-  acumulado, con doble guarda en el `UPDATE` (saldo ≥ 0 y tope 50 %).
-- **Aforo** (RNF-SAF-01): `AFORO_MAXIMO` desde `.env`; alerta al 90 % y
-  bloqueo al 100 %.
-- **TLS (RNF-SEG-01)** y disponibilidad (RNF-CAL-01) dependen del despliegue,
-  no de este repositorio.
+  aJSON() {
+    return { ok: false, error: { codigo: this.#codigo, mensaje: this.message,
+                                 detalles: this.#detalles } };
+  }
+}
+```
 
-## 11. Estructura del repositorio
+### 5.3 `validadores.js` — `ColectorErrores`
+
+```js
+const errores = new ColectorErrores();
+errores.exigirTexto('nombreRol', datos.nombreRol, { maximo: LIMITES.NOMBRE_ROL });
+errores.exigirCorreo('email', datos.email);
+errores.exigirValorDeLista('estado', datos.estado, Object.values(ESTADO));
+errores.lanzarSiHayErrores();   // 400 con TODOS los detalles, de una sola vez
+```
+
+Si cada validación lanzara inmediato, el cliente corregiría campo por campo y
+reenviaría la petición cinco veces. Aquí recibe los cinco de una vez.
+
+---
+
+## 6. Paso 5 — Middleware (`src/middleware`)
+
+| Archivo | Exporta |
+|---|---|
+| `logger.js` | `registrar`, `registrarInfo`, `registrarAviso`, `registrarError`, `registrarPeticion`, `COLOR` |
+| `errorHandler.js` | `rutaNoEncontrada`, `manejadorErrores`, `traducirErrorMySQL` |
+| `validarParametros.js` | `validarIdNumerico`, `exigirCuerpo`, `esEnteroPositivo` |
+
+### 6.1 `errorHandler.js` — traducción de MySQL a HTTP
+
+```js
+switch (error.code) {
+  case 'ER_DUP_ENTRY':            return AppError.conflicto('El registro ya existe...');   // 409
+  case 'ER_NO_REFERENCED_ROW':    return new AppError('El registro referenciado no existe', 400, 'LLAVE_FORANEA');
+  case 'ER_ROW_IS_REFERENCED':    return new AppError('Otros registros dependen de el', 409, 'LLAVE_FORANEA');
+  case 'ER_DATA_TOO_LONG':        return AppError.validacion('Supera el tamanio permitido'); // 400
+  case 'ECONNREFUSED':            return AppError.baseDatos('No se pudo conectar con MySQL'); // 500
+  case 'ER_ACCESS_DENIED_ERROR':  return AppError.baseDatos('Credenciales incorrectas');      // 500
+  default:                        return null;
+}
+```
+
+**Regla de Express:** el manejador de errores necesita **4 parámetros** y debe ser el
+**último** `app.use()`. Con 3 parámetros Express lo trata como un middleware normal y
+nunca se activa.
+
+### 6.2 `try/catch` en cada controlador
+
+Cada método de los controladores abre su propio `try` y, si algo falla,
+reenvía el error con `next(error)`:
+
+```js
+crear = async (req, res, next) => {
+  try {
+    const rol = await rolService.crear(req.body);
+    res.set('Location', `/api/roles/${rol.id}`);
+    return respuesta.creado(res, { mensaje: MENSAJES.EXITO.RECURSO_CREADO, datos: rol });
+  } catch (error) {
+    next(error);
+  }
+};
+```
+
+Sin ese `catch`, Express **no** atrapa los errores de funciones `async`: la
+petición quedaría colgada para siempre.
+
+### 6.3 `validarParametros.js`
+
+```js
+router.get('/:id', validarIdNumerico('id'), controlador.obtener);
+router.post('/',   exigirCuerpo,           controlador.crear);
+```
+
+`GET /api/roles/abc` se rechaza con **400** antes de tocar MySQL (*fail fast*).
+
+---
+
+## 7. Paso 6 — Arranque y punto de salud
+
+### `src/index.js` (ya existente, no se modifica)
+
+Exige cuatro módulos que creamos en los pasos anteriores:
+
+```js
+const configuracion = require('./config/env');
+const db            = require('./config/database');
+const { crearAplicacion } = require('./config/express');
+const { registrar, registrarError } = require('./middleware/logger');
+```
+
+### Comandos
+
+```bash
+npm run dev        # con recarga automática (--watch)
+# o
+npm start          # una sola vez
+```
+
+### Verificación
+
+```bash
+curl http://localhost:3000/api/salud
+```
+
+```json
+{
+  "ok": true,
+  "mensaje": "Consulta realizada con exito",
+  "datos": {
+    "api": "activa",
+    "baseDatos": "conectada",
+    "tiempoActivoSegundos": 12,
+    "marcaTiempo": "2026-10-24T22:20:40.757Z"
+  }
+}
+```
+
+Log esperado en consola:
+
+```
+[2026-10-24T22:04:58.865Z] INFO  BASE_DE_DATOS_CONECTADA {"host":"localhost","esquema":"discoteca_api"}
+[2026-10-24T22:04:58.894Z] INFO  SERVIDOR_INICIADO {"puerto":3000,"entorno":"development",...}
+```
+
+Documento de descubrimiento:
+
+```bash
+curl http://localhost:3000/api
+```
+
+---
+
+## 8. Paso 7 — Entidad Rol + asignación de permisos
+
+### Tabla `roles`
+
+| Columna | Tipo | Restricción |
+|---|---|---|
+| `id_rol` | INT | PK AUTO_INCREMENT |
+| `nombre_rol` | VARCHAR(50) | NOT NULL, **UNIQUE** |
+| `descripcion` | VARCHAR(255) | NULL |
+| `estado` | ENUM('activo','inactivo') | DEFAULT 'activo' |
+| `fecha_creacion` | DATETIME | DEFAULT CURRENT_TIMESTAMP |
+
+### Tabla puente `rol_permiso` (relación N:M)
+
+PK compuesta (`id_rol`, `id_permiso`) con `ON DELETE CASCADE` en ambas llaves
+foráneas: al borrar un rol, MySQL borra solo las filas puente.
+
+### 8.1 `src/services/rol.service.js`
+
+```js
+const COLUMNAS_ROL = 'r.id_rol, r.nombre_rol, r.descripcion, r.estado, r.fecha_creacion';
+
+// Subconsulta correlacionada: evita el problema N+1 y no multiplica filas.
+const CONTEO_PERMISOS =
+  '(SELECT COUNT(*) FROM rol_permiso rp WHERE rp.id_rol = r.id_rol) AS total_permisos';
+
+class RolService {
+  #camposPermitidos = ['nombreRol', 'descripcion', 'estado'];
+
+  async listar(filtros)        { /* estado, busqueda, paginacion */ }
+  async obtenerPorId(id)       { /* + carga los permisos con JOIN */ }
+  async crear(datos)           { /* valida -> unicidad -> INSERT -> 201 */ }
+  async actualizar(id, datos)  { /* actualizacion PARCIAL */ }
+  async cambiarEstado(id, e)   { /* 'activo' | 'inactivo' */ }
+  async eliminar(id)           { /* cascada en rol_permiso; 409 si tiene usuarios */ }
+  async asignarPermiso(idRol, idPermiso)  { /* transaccion -> devuelve el rol */ }
+  async quitarPermiso(idRol, idPermiso)   { /* transaccion -> devuelve el ARREGLO restante */ }
+}
+```
+
+**Regla de negocio `ROL_SIN_PERMISOS`:** un rol no puede quedar con cero permisos.
+
+```js
+const [conteo] = await conexion.execute(
+  'SELECT COUNT(*) AS total FROM rol_permiso WHERE id_rol = ?', [idRol]);
+if (Number(conteo[0].total) <= SEGURIDAD.MINIMO_PERMISOS_ROL) {
+  throw AppError.conflicto(MENSAJES.NEGOCIO.ROL_SIN_PERMISOS);   // 409
+}
+```
+
+> El estado del rol **no** se revisa al asignar permisos: en la secuencia de Postman el
+> rol está `inactivo` (por el `PATCH` anterior) y aun así debe responder **200**.
+
+### 8.2 `src/controllers/rol.controller.js`
+
+Seis métodos de CRUD + dos para el sub-recurso, cada uno con su `try/catch`
+que hace `next(error)` hacia el manejador central:
+
+```js
+crear = async (req, res, next) => {
+  try {
+    const rol = await rolService.crear(req.body);
+    res.set('Location', `/api/roles/${rol.id}`);
+    return respuesta.creado(res, { mensaje: MENSAJES.EXITO.RECURSO_CREADO, datos: rol });
+  } catch (error) {
+    next(error);
+  }
+};
+```
+
+### 8.3 `src/routes/rol.routes.js`
+
+```js
+router.get('/',      rolController.listar);
+router.post('/',     exigirCuerpo, rolController.crear);
+
+// El sub-recurso va ANTES de '/:id', si no '/:id' se lo come.
+router.post('/:id/permisos',
+  validarIdNumerico('id'), exigirCuerpo, rolController.asignarPermiso);
+router.delete('/:id/permisos/:idPermiso',
+  validarIdNumerico('id'), validarIdNumerico('idPermiso'), rolController.quitarPermiso);
+
+router.get('/:id',    validarIdNumerico('id'), rolController.obtener);
+router.put('/:id',    validarIdNumerico('id'), exigirCuerpo, rolController.actualizar);
+router.patch('/:id/estado', validarIdNumerico('id'), exigirCuerpo, rolController.cambiarEstado);
+router.delete('/:id', validarIdNumerico('id'), rolController.eliminar);
+```
+
+### Endpoints
+
+| Método | Ruta | Éxito |
+|---|---|---|
+| GET | `/api/roles` | 200 |
+| POST | `/api/roles` | **201 + Location** |
+| GET | `/api/roles/:id` | 200 (incluye `permisos[]`) |
+| PUT | `/api/roles/:id` | 200 (parcial) |
+| PATCH | `/api/roles/:id/estado` | 200 |
+| DELETE | `/api/roles/:id` | 200 |
+| POST | `/api/roles/:id/permisos` | **200** (`datos.totalPermisos`) |
+| DELETE | `/api/roles/:id/permisos/:idPermiso` | **200** (`datos` = arreglo restante) |
+
+---
+
+## 9. Paso 8 — Entidad Permiso
+
+Tabla `permisos`: `id_permiso` PK, `nombre_permiso` VARCHAR(80) **UNIQUE**,
+`descripcion` VARCHAR(255), `estado` ENUM. **No tiene `fecha_creacion`.**
+
+```js
+class PermisoService {
+  #camposPermitidos = ['nombrePermiso', 'descripcion', 'estado'];
+
+  async listar(filtros)   { /* ORDER BY nombre_permiso: el listado de Postman usa
+                               lista[0] y lista[1] como permisoAsignarId/2Id */ }
+  async obtenerPorId(id)  { /* 404 si no existe */ }
+  async crear(datos)      { /* 409 si nombre duplicado */ }
+  async actualizar(id, d) { /* parcial */ }
+  async cambiarEstado(id, e) { /* activo | inactivo */ }
+  async eliminar(id)      { /* rol_permiso tiene CASCADE -> nunca 409 */ }
+}
+```
+
+| Método | Ruta | Éxito |
+|---|---|---|
+| GET | `/api/permisos` | 200 (**≥ 19** registros) |
+| POST | `/api/permisos` | **201 + Location** |
+| GET | `/api/permisos/:id` | 200 |
+| PUT | `/api/permisos/:id` | 200 |
+| PATCH | `/api/permisos/:id/estado` | 200 |
+| DELETE | `/api/permisos/:id` | 200 |
+
+---
+
+## 10. Paso 9 — Entidad Usuario
+
+Tabla `usuarios`: `id_usuario` PK, `id_rol` FK→`roles` (NOT NULL), `nombre`,
+`apellido`, `email` **UNIQUE**, `contrasena_hash` NOT NULL, `telefono`, `estado`,
+`fecha_creacion`.
+
+### 10.1 `src/services/usuario.service.js`
+
+```js
+const COLUMNAS_USUARIO = `
+  u.id_usuario, u.id_rol, u.nombre, u.apellido, u.email,
+  u.telefono, u.estado, u.fecha_creacion, r.nombre_rol`;
+// OJO: contrasena_hash NO se pide en ninguna lectura.
+// Si no se pide, no puede filtrarse por accidente.
+```
+
+**Regla #1:** la contraseña jamás viaja en claro.
+
+```js
+// al crear
+datosNormalizados.contrasenaHash = await cifrado.hashearPassword(datosNormalizados.contrasena);
+
+// al actualizar (solo si el PUT la trajo)
+if (datosNormalizados.contrasena) {
+  const hash = await cifrado.hashearPassword(datosNormalizados.contrasena);
+  await db.ejecutar('UPDATE usuarios SET contrasena_hash = ? WHERE id_usuario = ?', [hash, id]);
+}
+```
+
+Validación de contraseña (regla `R-CLAVE-01`): **8+ caracteres, al menos una letra y un
+número** → `Clave1234` pasa, `123` no.
+
+`PUT /api/usuarios/:id` es **parcial**: Postman manda solo `{"telefono": "..."}` y el
+resto de los campos se conservan.
+
+### 10.2 Endpoints
+
+| Método | Ruta | Éxito |
+|---|---|---|
+| GET | `/api/usuarios` | 200 |
+| POST | `/api/usuarios` | **201 + Location** |
+| GET | `/api/usuarios/:id` | 200 |
+| PUT | `/api/usuarios/:id` | 200 (parcial) |
+| PATCH | `/api/usuarios/:id/estado` | 200 |
+| DELETE | `/api/usuarios/:id` | 200 |
+
+Ninguna respuesta contiene la cadena `contrasenaHash`: lo garantiza `Usuario.toJSON()`,
+que no lo serializa.
+
+---
+
+## 11. Paso 10 — Pruebas con `curl`
+
+> **Consejo en Windows:** PowerShell comilla mal el JSON al pasárselo a `curl`. Escribe
+> el cuerpo en un archivo y úsalo con `--data-binary "@archivo.json"`.
+
+```bash
+# Crear un rol
+echo {"nombreRol":"auditor","descripcion":"Rol de prueba"} > body.json
+curl -i -X POST http://localhost:3000/api/roles -H "Content-Type: application/json" --data-binary "@body.json"
+```
+
+### Casos felices
+
+```bash
+curl http://localhost:3000/api/salud
+curl http://localhost:3000/api/roles
+curl http://localhost:3000/api/permisos
+curl http://localhost:3000/api/usuarios
+curl -X POST  http://localhost:3000/api/roles      -H "Content-Type: application/json" --data-binary "@body.json"
+curl -X PUT   http://localhost:3000/api/roles/15   -H "Content-Type: application/json" --data-binary "@body.json"
+curl -X PATCH http://localhost:3000/api/roles/15/estado -H "Content-Type: application/json" -d '{"estado":"inactivo"}'
+curl -X DELETE http://localhost:3000/api/roles/15
+```
+
+### Casos negativos
+
+| Prueba | Esperado |
+|---|---|
+| `GET /api/roles/abc` | **400** `VALIDACION` |
+| `GET /api/roles/99999` | **404** `NO_ENCONTRADO` |
+| `POST /api/roles` con `nombreRol: "administrador"` | **409** `CONFLICTO` |
+| `POST /api/usuarios` con `email` repetido | **409** `CONFLICTO` |
+| `POST /api/usuarios` con `idRol: 999` | **400** `VALIDACION` |
+| `POST /api/usuarios` con `contrasena: "123"` | **400** (`detalles[0].campo = contrasena`) |
+| `POST` con cuerpo `{}` | **400** `CUERPO_INVALIDO` |
+| `POST` con JSON roto | **400** `CUERPO_INVALIDO` |
+| `PUT` sin campos actualizables | **400** `CUERPO_INVALIDO` |
+| `POST /api/roles/:id/permisos` dos veces el mismo | **409** `CONFLICTO` |
+| `DELETE /api/roles/:id/permisos/:idPermiso` (el último) | **409** `ROL_SIN_PERMISOS` |
+| `DELETE /api/roles/5` (rol con usuarios) | **409** `LLAVE_FORANEA` |
+
+---
+
+## 12. Paso 10b — Pruebas manuales en Postman (22 requests)
+
+No hay colección que importar: todo se hace **paso a paso y a mano**. La
+lista completa, con la URL y el body de cada petición para copiar y pegar,
+está en [`PRUEBAS.md`](PRUEBAS.md).
+
+### Configuración de cada petición
+
+| Pestaña | Qué hacer |
+|---|---|
+| **Params** | Nada. Déjala vacía. |
+| **Authorization** | Nada (`No Auth`): la API no tiene JWT todavía. |
+| **Headers** | Nada: Postman agrega `Content-Type: application/json` solo, al elegir Body → raw → JSON. |
+| **Body** | Aquí va el JSON (**raw** → **JSON**). En `GET` y `DELETE`: **none**. |
+| **Scripts** | Nada. |
+| **Settings** | Nada. |
+
+### Cómo pasar los `id` de una petición a otra
+
+Los ids se copian de la respuesta. Un `POST` contesta:
+
+```json
+{ "ok": true, "mensaje": "Registro creado correctamente",
+  "datos": { "id": 59, "nombrePermiso": "prueba.postman" } }
+```
+
+`datos.id` = **59** → se pega en la URL del siguiente paso:
+`http://localhost:3000/api/permisos/59`
+
+Tres reglas:
+
+1. **Los ids no se reutilizan.** Cada `POST` genera uno nuevo y más alto; si
+   borras el registro, ese id ya no sirve y el siguiente `DELETE` dará 404.
+2. **Una sola barra en la URL.** `//api/permisos` responde 404
+   `RUTA_NO_ENCONTRADA`.
+3. **`PATCH /:id/estado` solo cambia `estado`** y descarta el resto del body.
+   Para editar nombre, descripción, teléfono, etc. se usa `PUT /:id`.
+
+### Orden exacto (22 requests)
+
+**Permiso (6)**
+
+1. `GET /api/permisos` → 200, ≥19 → copia `datos[0].id` y `datos[1].id`
+2. `POST /api/permisos` → **201 + Location** → copia `datos.id`
+3. `PUT /api/permisos/:id` → 200
+4. `GET /api/permisos/:id` → 200
+5. `PATCH /api/permisos/:id/estado` → 200
+6. `DELETE /api/permisos/:id` → 200
+
+**Rol (10)**
+
+7. `GET /api/roles` → 200, ≥3, encuentra `administrador` → copia su `id`
+8. `POST /api/roles` → **201 + Location** → copia `datos.id`
+9. `PUT /api/roles/:id` → 200 (`datos.descripcion` cambió)
+10. `GET /api/roles/:id` → 200 (aún sin permisos: `permisos: []`)
+11. `PATCH /api/roles/:id/estado` → 200 (rol queda **inactivo**)
+12. `POST /api/roles/:id/permisos` → **200**, `totalPermisos ≥ 1` ← *rol inactivo, igual 200*
+13. `POST /api/roles/:id/permisos` (2.º) → 200, `totalPermisos ≥ 2`
+14. `DELETE /api/roles/:id/permisos/:idPermiso` → 200, **`datos.length ≥ 1`** (arreglo)
+15. `DELETE /api/roles/:id/permisos/:idPermiso` (2.º) → **409** (no puede quedar vacío)
+16. `DELETE /api/roles/:id` → 200 (la cascada limpia `rol_permiso`)
+
+**Usuario (6)**
+
+17. `GET /api/usuarios` → 200, ≥3, **sin `contrasenaHash`**
+18. `POST /api/usuarios` → **201** → copia `datos.id`
+19. `GET /api/usuarios/:id` → 200, **sin `contrasenaHash`**
+20. `PUT /api/usuarios/:id` → 200 (solo manda `telefono`)
+21. `PATCH /api/usuarios/:id/estado` → 200
+22. `DELETE /api/usuarios/:id` → 200
+
+**Fuera de alcance (404 esperada):** `bitacora`, `proveedores`, `productos`,
+`servicios`, `categorias/clientes`, `categorias/empleados`, `clientes`, `empleados`.
+
+---
+
+## 13. Paso 11 — Códigos de error de la API
+
+### Formato de éxito
+
+```json
+{ "ok": true, "mensaje": "Registro creado correctamente",
+  "datos": { }, "meta": { "total": 3, "pagina": 1, "limite": 20 } }
+```
+
+### Formato de error
+
+```json
+{ "ok": false,
+  "error": { "codigo": "CONFLICTO",
+             "mensaje": "Ya existe un rol llamado \"administrador\"",
+             "detalles": null } }
+```
+
+### Códigos
+
+| Código HTTP | `error.codigo` | Cuándo |
+|---|---|---|
+| 400 | `VALIDACION` | Datos inválidos (detalle campo a campo en `detalles`) |
+| 400 | `CUERPO_INVALIDO` | Cuerpo vacío, JSON roto o sin campos actualizables |
+| 400 | `LLAVE_FORANEA` | Se referenció un `id` que no existe |
+| 404 | `NO_ENCONTRADO` | El recurso no existe |
+| 404 | `RUTA_NO_ENCONTRADA` | Ninguna ruta coincidió con la petición |
+| 409 | `CONFLICTO` | Registro duplicado, registro con hijos, rol sin permisos |
+| 409 | `LLAVE_FORANEA` | No se puede borrar: otros registros dependen de él |
+| 500 | `INTERNO` | Falla imprevista (el detalle solo va al log, nunca al cliente) |
+| 500 | `BASE_DE_DATOS` | MySQL apagado o credenciales incorrectas |
+
+### Traducción MySQL → HTTP
+
+| Error de MySQL | HTTP |
+|---|---|
+| `ER_DUP_ENTRY` | 409 |
+| `ER_NO_REFERENCED_ROW` | 400 |
+| `ER_ROW_IS_REFERENCED` | 409 |
+| `ER_DATA_TOO_LONG` | 400 |
+| `ER_BAD_NULL_ERROR` | 400 |
+| `ECONNREFUSED` / `ER_ACCESS_DENIED_ERROR` | 500 |
+| `SyntaxError` de `express.json()` | 400 |
+
+---
+
+## 14. Estructura final del proyecto
 
 ```
 discoteca-api/
-├── database/            01_schema.sql · 02_usuario_app.sql · 03_seed.sql · CAMBIOS.md
-├── docs/
-│   ├── postman/         Discoteca.postman_collection.json (133 requests)
-│   ├── scrum/           sprint-planning.md · tablero.md · cierre-sprint.md
-│   ├── uml/             diagramas de objetos (.drawio + .png)
-│   └── TRAZABILIDAD.md  matriz RF → endpoint → fase → evidencia
-├── src/                 código fuente por capas (ver sección 4)
-├── tests/               suite node --test + runner E2E de la colección
-├── .env.example         plantilla de variables de entorno
-└── package.json         scripts: start · dev · test · test:e2e · db:*
+├── .gitignore                     nuevo
+├── .env.example                   nuevo
+├── README.md                      nuevo (este archivo)
+├── package.json                   nuevo
+├── package-lock.json              lo genera npm install
+├── node_modules/                  lo genera npm install (ignorado por git)
+├── database/                      ya existía (esquema y seeds)
+├── docs/                          ya existía (postman, plan)
+└── src/
+    ├── .env                       ya existía (no se modificó)
+    ├── index.js                   ya existía (no se modificó)
+    ├── config/
+    │   ├── env.js                 nuevo
+    │   ├── database.js            nuevo
+    │   └── express.js             nuevo
+    ├── controllers/
+    │   ├── salud.controller.js    nuevo
+    │   ├── rol.controller.js      nuevo
+    │   ├── permiso.controller.js  nuevo
+    │   └── usuario.controller.js  nuevo
+    ├── middleware/
+    │   ├── logger.js              nuevo
+    │   ├── errorHandler.js        nuevo
+    │   └── validarParametros.js   nuevo
+    ├── models/                    ya existía (26 clases, NO se modificó)
+    ├── routes/
+    │   ├── index.js               nuevo
+    │   ├── salud.routes.js        nuevo
+    │   ├── rol.routes.js          nuevo
+    │   ├── permiso.routes.js      nuevo
+    │   └── usuario.routes.js      nuevo
+    ├── services/
+    │   ├── rol.service.js         nuevo
+    │   ├── permiso.service.js     nuevo
+    │   └── usuario.service.js     nuevo
+    └── utils/
+        ├── constants.js           nuevo
+        ├── AppError.js            nuevo
+        ├── respuesta.js           nuevo
+        ├── mensajes.js            nuevo
+        ├── formato.js             nuevo
+        ├── fechas.js              nuevo
+        ├── validadores.js         nuevo
+        └── cifrado.js             nuevo
 ```
 
-## 12. Licencia
+### Comandos rápidos
 
-Proyecto formativo SENA — ficha 3489088. Licencia MIT.
+```bash
+npm install                 # instalar dependencias
+npm run dev                 # arrancar con recarga
+npm start                   # arrancar una sola vez
+curl http://localhost:3000/api/salud   # verificar
+```

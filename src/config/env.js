@@ -1,52 +1,57 @@
 /**
  * src/config/env.js
  * ---------------------------------------------------------------------
- * Carga y VALIDA las variables de entorno del archivo .env.
+ * Carga y VALIDA las variables de entorno.
  *
  * POR QUE UN MODULO DEDICADO?
  *
- *   1. `require('dotenv').config()` se ejecuta UNA sola vez, aqui.
- *      El resto de la aplicacion importa este modulo en lugar de leer
- *      `process.env` por todos lados. Si cada archivo leyera process.env
- *      directamente, no habria un unico lugar donde ver la configuracion.
+ * 1. `require('dotenv').config()` se ejecuta UNA sola vez, aqui.
+ *    El resto de la aplicacion importa este modulo en lugar de leer
+ *    `process.env` por todos lados. Si cada archivo leyera process.env
+ *    directamente, no existiria un unico lugar donde ver "que
+ *    configuracion esta usando el servidor".
  *
- *   2. Validamos al arrancar (patron "fail fast"). Es mejor que el
- *      servidor NO arranque por falta de DB_CLAVE, que arranque y falle
- *      con un error confuso en la primera peticion de un usuario.
+ * 2. Validamos al ARRANCAR (fail fast). Es mejor que el servidor NO
+ *    arranque por falta de DB_CLAVE, que arranque y falle despues con
+ *    un error confuso en la primera peticion de un usuario real.
  *
- *   3. Convertimos los tipos. `process.env` SIEMPRE devuelve texto:
- *      process.env.PUERTO es "3000" (cadena), no 3000 (numero).
+ * 3. Convertimos los TIPOS. `process.env` SIEMPRE devuelve texto:
+ *    process.env.PUERTO es "3000" (string), no 3000 (number). Sin
+ *    convertir, `app.listen("3000")` funciona por casualidad y
+ *    `config.puerto > 1024` da resultados raros.
+ *
+ * DONDE ESTA EL ARCHIVO .env?
+ * En `src/.env`, es decir, UN nivel arriba de este archivo
+ * (config/). Por eso la ruta es '../.env' resuelta contra __dirname.
  */
 
 const path = require('node:path');
 
 // dotenv lee el archivo .env y copia su contenido a process.env.
-// Indicamos la ruta explicita para que funcione desde cualquier carpeta.
-// `quiet: true` silencia el aviso "injected env (...)" que dotenv
-// imprime en stderr; esa linea solo ensucia el log del servidor.
+// Indicamos la ruta de forma explicita para que funcione sin importar
+// desde que carpeta se ejecute "node src/index.js".
 require('dotenv').config({
-  path: path.resolve(__dirname, '..', '..', '.env'),
-  quiet: true
+  path: path.resolve(__dirname, '..', '.env')
 });
 
-// ---------------------------------------------------------------------
-// Funciones auxiliares de lectura
-// ---------------------------------------------------------------------
+const MENSAJES = require('../utils/mensajes');
 
 /**
- * Lee una variable OBLIGATORIA. Si no existe o viene vacia, detiene el
- * proceso con un mensaje claro. Esto es el corazon del "fail fast".
+ * Lee una variable OBLIGATORIA. Si no existe, detiene el proceso.
  *
- * @param {string} nombre  Nombre de la variable en el .env
- * @returns {string} El valor recortado de espacios
+ * @param {string} nombre
+ * @returns {string}
  */
 function obligatoria(nombre) {
   const valor = process.env[nombre];
 
   if (valor === undefined || valor === null || String(valor).trim() === '') {
-    console.error(`\n[CONFIG] Falta la variable de entorno obligatoria: ${nombre}`);
-    console.error(`         Copia .env.example a .env y completala.\n`);
-    // Codigo de salida distinto de 0 = hubo un fallo.
+    // console.error escribe en el flujo de errores (stderr), que es
+    // donde mira un administrador del sistema; stdout es para datos.
+    console.error(`\n[CONFIG] ${MENSAJES.SISTEMA.VARIABLE_ENTORNO_FALTANTE(nombre)}\n`);
+
+    // process.exit(1) termina el programa con codigo de error.
+    // El 0 significa "todo bien"; cualquier otro numero, "fallo".
     process.exit(1);
   }
 
@@ -54,10 +59,10 @@ function obligatoria(nombre) {
 }
 
 /**
- * Lee una variable OPCIONAL. Si falta, devuelve el valor por defecto.
+ * Lee una variable OPCIONAION y devuelve un valor por defecto si falta.
  *
  * @param {string} nombre
- * @param {*}      valorPorDefecto
+ * @param {*} valorPorDefecto
  * @returns {string}
  */
 function opcional(nombre, valorPorDefecto) {
@@ -72,7 +77,6 @@ function opcional(nombre, valorPorDefecto) {
 
 /**
  * Lee una variable y la convierte a numero entero.
- * Si el texto no es un numero, devuelve el valor por defecto.
  *
  * @param {string} nombre
  * @param {number} valorPorDefecto
@@ -107,10 +111,12 @@ function lista(nombre, valorPorDefecto = []) {
 
 // ---------------------------------------------------------------------
 // Objeto de configuracion final.
-// Object.freeze lo vuelve INMUTABLE: ningun modulo puede alterarlo
-// despues de que la aplicacion arranco.
+// Object.freeze lo vuelve inmutable: ningun modulo puede alterarlo
+// despues de que la aplicacion arranco. Si alguien intenta
+// `config.puerto = 9999`, en modo estricto lanza TypeError y en modo
+// flojo no pasa nada: de cualquier manera el valor NO cambia.
 // ---------------------------------------------------------------------
-const configuracion = Object.freeze({
+const config = Object.freeze({
   // Entorno de ejecucion: development | production | test
   entorno: opcional('NODE_ENV', 'development'),
 
@@ -127,20 +133,8 @@ const configuracion = Object.freeze({
     limiteConexiones: entera('DB_LIMITE_CONEXIONES', 10)
   }),
 
-  // Origenes autorizados para CORS (el frontend).
+  // Origenes autorizados para CORS.
   origenesPermitidos: lista('ORIGENES_PERMITIDOS', ['http://localhost:5500']),
-
-  // Autenticacion por token.
-  autenticacion: Object.freeze({
-    secreto: obligatoria('JWT_SECRETO'),
-    expiracion: opcional('JWT_EXPIRACION', '2h')
-  }),
-
-  // Reglas de negocio parametrizadas en el .env.
-  negocio: Object.freeze({
-    aforoMaximo: entera('AFORO_MAXIMO', 200),
-    ivaPorcentaje: entera('IVA_PORCENTAJE', 16)
-  }),
 
   // Atajos booleanos para no comparar textos por toda la aplicacion.
   get esDesarrollo() {
@@ -152,4 +146,4 @@ const configuracion = Object.freeze({
   }
 });
 
-module.exports = configuracion;
+module.exports = config;

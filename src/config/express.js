@@ -1,227 +1,154 @@
 /**
- * 
  * src/config/express.js
  * ---------------------------------------------------------------------
- * UNICO lugar donde se arma la aplicacion Express.
+ * Construye y configura la aplicacion Express.
  *
- * POR QUE ESTA EN CARPETA config/ Y NO EN index.js?
- *   Para separar dos responsabilidades:
- *      - express.js  -> COMO esta construida la app (middleware, rutas).
- *      - index.js    -> CICLO DE VIDA (arrancar, verificar BD, apagar).
- *   Con esto, para escribir pruebas basta con llamar a
- *   crearAplicacion() sin que el servidor escuche en un puerto.
+ * POR QUE SEPARAR ESTO DE index.js?
+ * Porque asi la aplicacion se puede CREAR sin ARRANCAR el servidor.
+ * Eso es lo que permite escribir pruebas automatizadas: el test
+ * importa la app y le manda peticiones falsas, sin ocupar el puerto
+ * 3000 ni necesitar que nadie levante nada.
  *
- * ORDEN DE LOS MIDDLEWARES: IMPORTANTE
- * ---------------------------------------------------------------------
- *   Express ejecuta los middleware en el ORDEN en que se registran.
- *   Por eso el orden de abajo no es caprichoso:
+ *   config/express.js -> crea la app  (QUE hace la aplicacion)
+ *   src/index.js      -> la enciende  (CUANDO y DONDE escucha)
  *
- *      1. CORS          -> antes de leer cualquier cuerpo.
- *      2. express.json  -> convierte el cuerpo JSON a req.body.
- *      3. rutas         -> logica de la API (solo llega cuerpo valido).
- *      4. 404           -> si ninguna ruta coincidio, informa.
- *      5. manejador errores -> ULTIMO: atrapa cualquier throw anterior.
+ * EL ORDEN DE LOS app.use() ES CRITICO
+ * Express ejecuta los middlewares en el ORDEN EN QUE SE REGISTRAN.
+ * Este archivo esta escrito de arriba hacia abajo siguiendo el viaje
+ * real de una peticion:
  *
- *   Si el manejador de errores se pusiera antes de las rutas, nunca
- *   veria los errores que ocurren dentro de un controller.
+ *   1. CORS            -> permiso del navegador
+ *   2. express.json()  -> convertir el cuerpo JSON en objeto
+ *   3. logger          -> registrar la peticion
+ *   4. rutas           -> atender la peticion
+ *   5. raiz            -> saludo en /
+ *   6. 404             -> ninguna ruta coincidio
+ *   7. errores         -> SIEMPRE el ultimo
+ *
+ * Si el logger estuviera antes de express.json(), no podria mostrar el
+ * cuerpo porque todavia no existiria. Si el manejador de errores
+ * estuviera antes de las rutas, nunca atraparia nada.
  */
 
 const express = require('express');
 const cors = require('cors');
 
-const configuracion = require('./env');
+const config = require('./env');
+const rutas = require('../routes');
+const { registrarPeticion } = require('../middleware/logger');
 const { rutaNoEncontrada, manejadorErrores } = require('../middleware/errorHandler');
-const { registrarAviso } = require('../middleware/logger');
-
-// Cada modulo de rutas se monta aqui. Agregar una parte nueva del
-// proyecto consiste en una linea nueva.
-const rutaSalud = require('../routes/salud.routes');
-const rutaPermiso = require('../routes/permiso.routes');
-const rutaRol = require('../routes/rol.routes');
-const rutaUsuario = require('../routes/usuario.routes');
-
-  const rutaAuth = require('../routes/auth.routes');
-
-  const rutaBitacora = require('../routes/bitacora.routes');
-
-const rutaProveedor = require('../routes/proveedor.routes');
-
-const rutaProducto = require('../routes/producto.routes');
-
-const rutaServicio = require('../routes/servicio.routes');
-
-const rutaCategoriaEmpleado = require('../routes/categoriaEmpleado.routes');
-const rutaCategoriaCliente = require('../routes/categoriaCliente.routes');
-
-const rutaEmpleado = require('../routes/empleado.routes');
-
-const rutaCliente = require('../routes/cliente.routes');
-
-const rutaCompra = require('../routes/compra.routes');
-
-const rutaInventario = require('../routes/inventario.routes');
-
-const rutaAgendaEmpleado = require('../routes/agendaEmpleado.routes');
-
-const rutaReserva = require('../routes/reserva.routes');
-
-const rutaIngreso = require('../routes/ingreso.routes');
-
-const rutaEvento = require('../routes/evento.routes');
-
-const rutaAgendaEvento = require('../routes/agendaEvento.routes');
-
-const rutaNotificacion = require('../routes/notificacion.routes');
-
-const rutaVenta = require('../routes/venta.routes');
-
-const rutaProgramaPunto = require('../routes/programa-puntos.routes');
-
-const rutaReporte = require('../routes/reporte.routes');
 
 /**
- * Decide si un origen (frontend) tiene permiso para llamar a la API.
+ * Crea la aplicacion Express completamente configurada.
  *
- * Se usa en forma de funcion porque:
- *   - peticiones SIN cabecera Origin (Postman, curl) deben pasar;
- *   - asi podemos dejar registro de los intentos rechazados.
- *
- * @param {string|undefined} origen  Valor de la cabecera Origin
- * @param {function} callback        (error, permitido)
- */
-function resolverOrigen(origen, callback) {
-  // Postman y curl no envian Origin; no hay que bloquearlos.
-  if (!origen) {
-    return callback(null, true);
-  }
-
-  const permitido = configuracion.origenesPermitidos.includes(origen);
-
-  if (!permitido) {
-    registrarAviso('CORS_ORIGEN_RECHAZADO', { origen });
-  }
-
-  // callback(null, false) NO corta la peticion: simplemente no agrega
-  // las cabeceras CORS, y el navegador es quien la bloquea del lado
-  // del cliente.
-  return callback(null, permitido);
-}
-
-/**
- * Crea y configura la aplicacion Express.
- *
- * @returns {object} instancia de app lista para app.listen()
+ * @returns {import('express').Express}
  */
 function crearAplicacion() {
   const app = express();
 
-  // ---- 1. Cabeceras de seguridad basics ----
+  // -------------------------------------------------------------------
+  // 1. CONFIGURACION BASICA
+  // -------------------------------------------------------------------
 
-  // Express agrega "X-Powered-By: Express" a cada respuesta. Decirle
-  // al atacante que framework usas le ahorra trabajo: se desactiva.
+  // Oculta la cabecera "X-Powered-By: Express".
+  // Decirle al mundo que framework usas solo le ahorra trabajo a quien
+  // busca vulnerabilidades conocidas.
   app.disable('x-powered-by');
 
-  // URLencoded evita que Express interprete formularios; aqui solo
-  // consumimos JSON. Se limita el tamano del cuerpo a 10 MB para que
-  // nadie mande un payload gigante y agote la memoria del servidor.
-  app.use(express.json({ limit: '10mb' }));
-
-  // ---- 2. CORS ----
+  // -------------------------------------------------------------------
+  // 2. CORS (Cross-Origin Resource Sharing)
+  // -------------------------------------------------------------------
+  //
+  // QUE PROBLEMA RESUELVE?
+  // Por seguridad, el navegador bloquea las peticiones de JavaScript
+  // hacia un ORIGEN distinto al de la pagina. Un origen es la terna
+  // protocolo + dominio + puerto.
+  //
+  // Nuestro frontend corre en  http://localhost:5500
+  // Nuestra API corre en       http://localhost:3000
+  //                                              ^^^^ puerto distinto
+  //                                              = origen distinto
+  //
+  // Sin CORS, el fetch del frontend falla con el error
+  // "blocked by CORS policy", aunque la API responda perfecto.
+  // CORS es el servidor diciendo: "autorizo a este origen".
+  //
+  // IMPORTANTE: NO usamos origin: '*' aunque sea mas facil. Hay que
+  // declarar los origenes permitidos (vienen de .env). Una API abierta
+  // a cualquier origen puede ser consumida por cualquier sitio web.
   app.use(
     cors({
-      origin: resolverOrigen,
-      // Permite enviar cookies/cabeceras de autorizacion.
-      credentials: true,
-      // Permite los metodos que usa la API REST.
+      origin: config.origenesPermitidos,
+
+      // Verbos HTTP que aceptamos.
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      // Permite la cabecera Authorization (tokens JWT).
-      allowedHeaders: ['Content-Type', 'Authorization']
+
+      // Cabeceras que el cliente puede enviar.
+      allowedHeaders: ['Content-Type', 'Accept'],
+
+      // Cabeceras que el navegador puede LEER de la respuesta.
+      // Sin esto, el frontend no puede leer la cabecera Location que
+      // devolvemos al crear un recurso.
+      exposedHeaders: ['Location'],
+
+      // Cuanto tiempo (segundos) puede el navegador cachear el permiso
+      // de la peticion previa OPTIONS. Ahorra viajes de ida y vuelta.
+      maxAge: 86400
     })
   );
 
-  // ---- 3. Rutas de la API ----
-  // Todas se montan bajo /api para que quede claro que es un backend
-  // y no sirva paginas HTML.
-  app.use('/api/salud', rutaSalud);
+  // -------------------------------------------------------------------
+  // 3. LECTURA DEL CUERPO DE LA PETICION
+  // -------------------------------------------------------------------
 
-  // CRUD de permisos: la PRIMERA entidad con las 4 capas completas.
-  app.use('/api/permisos', rutaPermiso);
+  // express.json() lee el cuerpo, lo interpreta como JSON y lo deja en
+  // req.body. Sin este middleware, req.body seria undefined.
+  //
+  // El limite de 100kb protege contra peticiones gigantes. Para esta
+  // API un cuerpo nunca pasa de unos kilobytes.
+  app.use(express.json({ limit: '100kb' }));
 
-  // CRUD de roles. A partir de aqui cada entidad nueva solo agrega
-  // dos lineas: el require de arriba y este montaje.
-  app.use('/api/roles', rutaRol);
+  // Lee los formularios HTML clasicos (application/x-www-form-urlencoded).
+  app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
-  // Cuentas de usuario del sistema (el CRUD de credenciales).
-  app.use('/api/usuarios', rutaUsuario);
+  // -------------------------------------------------------------------
+  // 4. REGISTRO DE PETICIONES (logging)
+  // -------------------------------------------------------------------
+  app.use(registrarPeticion);
 
-  // Sesion: login, logout, registro publico y perfil propio. Todo lo
-  // que necesite token se protege DENTRO de sus propias rutas.
-  app.use('/api/auth', rutaAuth);
+  // -------------------------------------------------------------------
+  // 5. RUTAS DE LA API
+  // -------------------------------------------------------------------
 
-  // Auditoria de cambios (lectura): exigir permiso bitacora.consultar.
-  app.use('/api/bitacora', rutaBitacora);
+  // Todo el enrutador principal se monta bajo el prefijo /api.
+  app.use('/api', rutas);
 
-  // Catalogo de proveedores.
-  app.use('/api/proveedores', rutaProveedor);
+  // Ruta raiz: un saludo que orienta a quien abre el servidor en el
+  // navegador y no sabe por donde empezar.
+  app.get('/', (req, res) => {
+    res.json({
+      ok: true,
+      mensaje: 'Bienvenido a discoteca-api. La documentacion de recursos esta en /api',
+      datos: {
+        documentacion: '/api',
+        estadoSalud: '/api/salud'
+      }
+    });
+  });
 
-  // Catalogo de productos.
-  app.use('/api/productos', rutaProducto);
+  // -------------------------------------------------------------------
+  // 6. MANEJO DE ERRORES (SIEMPRE AL FINAL)
+  // -------------------------------------------------------------------
 
-  // Catalogo de servicios.
-  app.use('/api/servicios', rutaServicio);
-
-  // Catalogos de categorias (empleados y clientes bajo el mismo prefijo).
-  app.use('/api/categorias/empleados', rutaCategoriaEmpleado);
-  app.use('/api/categorias/clientes', rutaCategoriaCliente);
-
-  // Ficha del personal.
-  app.use('/api/empleados', rutaEmpleado);
-
-  // Ficha de clientes.
-  app.use('/api/clientes', rutaCliente);
-
-  // Compras a proveedores (composicion compra+detalles).
-  app.use('/api/compras', rutaCompra);
-
-  // Inventario: alertas de stock minimo (RN-03).
-  app.use('/api/inventario', rutaInventario);
-
-  // Turnos del personal: agenda_empleados (fase 32).
-  app.use('/api/agenda', rutaAgendaEmpleado);
-
-  // Reservas de espacios (composicion reserva+detalle, fase 33).
-  app.use('/api/reservas', rutaReserva);
-
-  // Control de acceso: validacion de QR e ingresos (fase 36).
-  app.use('/api/ingresos', rutaIngreso);
-
-  // Programacion de eventos (fase 38).
-  app.use('/api/eventos', rutaEvento);
-
-  // Agenda de actividades del evento con conflicto RN-08 (fase 40).
-  app.use('/api/agenda-eventos', rutaAgendaEvento);
-
-  // Notificaciones simuladas RN-12 (fase 40).
-  app.use('/api/notificaciones', rutaNotificacion);
-
-  // Ventas al publico (composicion venta+detalle, fase 41).
-  app.use('/api/ventas', rutaVenta);
-
-  // Programa de puntos RN-11 (fase 43).
-  app.use('/api/puntos', rutaProgramaPunto);
-
-  // Reportes de desempeno RF-DES-01..10 (fases 45-48).
-  app.use('/api/reportes', rutaReporte);
-
-  // ---- 4. Ruta inexistente (404) ----
+  // Si la peticion llego hasta aqui, ninguna ruta coincidio -> 404.
   app.use(rutaNoEncontrada);
 
-  // ---- 5. Manejador central de errores (SIEMPRE el ultimo) ----
+  // Middleware de errores. Debe ser el ULTIMO app.use() y tener
+  // CUATRO parametros (err, req, res, next); si tiene tres, Express
+  // lo trata como un middleware normal y nunca se activa.
   app.use(manejadorErrores);
 
   return app;
 }
 
-module.exports = {
-  crearAplicacion
-};
+module.exports = { crearAplicacion };

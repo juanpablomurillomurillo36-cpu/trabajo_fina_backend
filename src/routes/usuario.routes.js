@@ -5,44 +5,55 @@
  *
  * TABLA DE ENDPOINTS
  * ---------------------------------------------------------------------
- * GET    /api/usuarios               Lista (filtros: estado, busqueda, idRol)
- * GET    /api/usuarios/:id           Detalle
- * POST   /api/usuarios               Crear (contrasena en claro -> hash)
- * PUT    /api/usuarios/:id           Actualizar (contrasena opcional)
- * PATCH  /api/usuarios/:id/estado    Activar / desactivar
- * DELETE /api/usuarios/:id           Eliminar (409 con historial)
+ * GET    /api/usuarios                  Listado con filtros y paginacion
+ * POST   /api/usuarios                  Crear (201 + Location)
+ * GET    /api/usuarios/:id              Detalle
+ * PUT    /api/usuarios/:id              Actualizar (parcial)
+ * PATCH  /api/usuarios/:id/estado       Cambiar estado
+ * DELETE /api/usuarios/:id              Eliminar
  * ---------------------------------------------------------------------
  *
- * NOTA DE SEGURIDAD: las rutas de LOGIN, REGISTRO, PERFIL y
- * RECUPERACION de contrasena NO viven aqui: van en /api/auth
- * (fase 20-21), porque son operaciones de SESION, no del CRUD.
- *
- * PROTECCION (fase 22): TODO el CRUD exige token + permiso
- * `usuarios.gestionar`. Gestionar cuentas es la operacion mas
- * sensible del sistema: quien puede crear usuarios puede crear
- * administradores.
+ * Sin autenticacion en esta fase. Cuando entre el JWT, el middleware
+ * de sesion se registra AQUI, delante de los controladores, para que
+ * ninguna de estas rutas se pueda tocar sin token.
  */
 
-const { Router } = require('express');
+const express = require('express');
 
 const usuarioController = require('../controllers/usuario.controller');
 const { validarIdNumerico, exigirCuerpo } = require('../middleware/validarParametros');
-const { requiereAutenticacion } = require('../middleware/autenticacion');
-const { requierePermiso } = require('../middleware/autorizacion');
 
-const router = Router();
+const router = express.Router();
 
-// Proteccion GLOBAL de la ruta: todo lo que sigue pasa por aqui.
-router.use(requiereAutenticacion, requierePermiso('usuarios.gestionar'));
+// ---------------------------------------------------------------------
+// Coleccion: /api/usuarios
+// ---------------------------------------------------------------------
 
-// ---- Coleccion: /api/usuarios ----
+// GET /api/usuarios
 router.get('/', usuarioController.listar);
+
+// POST /api/usuarios
 router.post('/', exigirCuerpo, usuarioController.crear);
 
-// ---- Recurso individual: /api/usuarios/:id ----
+// ---------------------------------------------------------------------
+// Recurso individual: /api/usuarios/:id
+// ---------------------------------------------------------------------
+
+// GET /api/usuarios/:id
 router.get('/:id', validarIdNumerico('id'), usuarioController.obtener);
+
+// PUT /api/usuarios/:id
 router.put('/:id', validarIdNumerico('id'), exigirCuerpo, usuarioController.actualizar);
-router.patch('/:id/estado', validarIdNumerico('id'), exigirCuerpo, usuarioController.cambiarEstado);
+
+// PATCH /api/usuarios/:id/estado
+router.patch(
+  '/:id/estado',
+  validarIdNumerico('id'),
+  exigirCuerpo,
+  usuarioController.cambiarEstado
+);
+
+// DELETE /api/usuarios/:id
 router.delete('/:id', validarIdNumerico('id'), usuarioController.eliminar);
 
 module.exports = router;

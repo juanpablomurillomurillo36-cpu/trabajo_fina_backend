@@ -1,89 +1,80 @@
 /**
  * src/utils/cifrado.js
  * ---------------------------------------------------------------------
- * Utilidades de cifrado (bcrypt) para la capa de autenticaci贸n.
+ * Hash de contrasenas con bcrypt.
  *
- * POR QUE BCRYPT Y NO OTRO HASH?
- * - Bcrypt es el est谩ndar de la industria para hashing de contrase帽as.
- * - Admite un factor de trabajo (work factor) que permite aumentar el
- *   costo computacional a medida que el hardware mejora, evita ataques
- *   de fuerza bruta con GPUs.
- * - Es lento por diseuxeolo, lo que lo hace resistente a ataques de
- *   diccionario fuera de l铆mite.
+ * REGLA #1 DE SEGURIDAD: JAMAS se guarda una contrasena en claro.
+ * Ni en la base, ni en un log, ni en una respuesta de la API. Solo
+ * guarda su HASH.
  *
- * REGLAS IMPLEMENTADAS
- * ---------------------------------------------------------------------
- * 1. SIEMPRE se usan salts generados por bcrypt (nunca manuales).
- * 2. El coste (work factor) por defecto es 10 (2^10 = 1024 rounds).
- *    Se puede aumentar en producci贸n (ej. 12 o 14) sin cambiar el
- *   c贸digo, bcrypt auto-detecta el coste en el hash.
- * 3. Nunca se muestra el hash raw al cliente: solo se compara.
- * 4. Si la contrase帽a es vac铐a, se devuelve un error inmediatus.
+ * QUE ES UN HASH?
+ * Una funcion de sentido unico: de "Clave1234" sale
+ * "$2b$12$Kix6...." (60 caracteres), pero del hash no se puede volver
+ * a la contrasena. Ademas, agregarle "sal" (salt) al hash garantiza
+ * que dos personas con la misma contrasena tengan hashes distintos,
+ * lo que impide descifrar en bloque con tablas precalculadas.
+ *
+ * POR QUE bcrypt y no MD5/SHA-256?
+ * Porque SHA esta pensado para RAPIDEZ: una tarjeta grafica hace
+ * miles de millones de intentos por segundo. bcrypt esta pensado para
+ * ser LENTO a proposito (los 12 "rounds" tardan ~250 ms), lo que hace
+ * inviable un ataque de fuerza bruta.
+ *
+ * POR QUE bcryptjs y no bcrypt?
+ * bcrypt nativo compila un modulo C con node-gyp, que suele fallar en
+ * Windows sin herramientas de compilacion. bcryptjs es javascript
+ * puro: instala y funciona en cualquier equipo.
  */
 
 const bcrypt = require('bcryptjs');
-
-const COSTO_DEFECTO = 10;
+const { SEGURIDAD } = require('./constants');
 
 /**
- * Hashea una contrase帽a usando bcrypt.
+ * Genera el hash de una contrasena.
  *
- * @param {string} password Contrase帽a en claro
- * @returns {Promise<string]} Hash generado por bcrypt
- * @throws {Error} Si la contrase帽a est谲 vac铐a o hay error en bcrypt
+ * @param {string} contrasena  En claro, tal como la escribio el usuario.
+ * @returns {Promise<string>}  El hash de 60 caracteres.
+ *
+ * @example
+ *   const hash = await cifrado.hashearPassword('Clave1234');
+ *   // -> "$2b$12$X1y2..."
  */
-async function hashearPassword(password) {
-  if (!password || typeof password !== 'string' || password.trim().length === 0) {
-    throw new Error('La contrase帽a no puede estar vac铐a');
-  }
-
-  const sal = await bcrypt.genSalt(COSTO_DEFECTO);
-  return await bcrypt.hash(password, sal);
+async function hashearPassword(contrasena) {
+  // bcrypt.hash es async: por debajo usa el hilo del pool de Node para
+  // no congelar el event loop mientras calcula los 12 round.
+  return bcrypt.hash(contrasena, SEGURIDAD.BCRYPT_ROUNDS);
 }
 
 /**
- * Comprueba si una contrase帽a en claro coincide con un hash bcrypt.
+ * Compara una contrasena en claro contra un hash guardado.
  *
- * @param {string} password Contrase帽a en claro a verificar
- * @param {string} hash Hash generado por hashearPassword
- * @returns {Promise<boolean]} true si coincide, false en caso contrario
- * @throws {Error} Si el hash no tiene el formato bsicrypt
+ * Es la UNICA manera correcta de verificarla. Se usa en el login
+ * (fase de autenticacion) y en el restablecimiento de clave.
+ *
+ * @param {string} contrasena   La que escribio el usuario ahora.
+ * @param {string} hash         La que esta en la base de datos.
+ * @returns {Promise<boolean>}  true si coinciden.
+ *
+ * @example
+ *   const coincide = await cifrado.verificarPassword('Clave1234', hashGuardado);
  */
-async function verificarPassword(password, hash) {
-  if (!password || typeof password !== 'string' || password.trim().length === 0) {
-    return false;
-  }
+async function verificarPassword(contrasena, hash) {
+  // Si en la base no hay hash (usuario creado por un camino raro),
+  // devolvemos false en vez de dejar que bcrypt explote con null.
+  if (typeof hash !== 'string' || hash === '') return false;
 
-  try {
-    return await bcrypt.compare(password, hash);
-  } catch (err) {
-    // Si el hash no es v谩lido bcrypt, devuelve false en lugar de lanzar
-    return false;
-  }
+  return bcrypt.compare(contrasena, hash);
 }
 
 /**
- * Obtiene el coste (work factor) que estaba usando bcrypt para generar
- * un hash en particular. Esto permite actualizar el coste en producci贸n
- * sin necesidad de re-hasar todos los passwords.
+ * Comprueba si un texto ya tiene forma de hash de bcrypt.
+ * Sirve para detectar dobles hashes en migraciones de datos.
  *
- * @param {string} hash Hash de bcrypt
- * @returns {number|null} El coste, o null si el formato es inv谓lido
+ * @param {*} valor
+ * @returns {boolean}
  */
-function obtenerCostoHash(hash) {
-  // El formato de bcrypt es: $2a$10$... o $2b$... etc.
-  // El n煤mero despu茅s del segundo $ es el coste.
-  const match = hash.match(/^\$2[abxy]\$\d+\$/, 'i');
-  if (!match) return null;
-  try {
-    return parseInt(match[0].split('$')[2], 10);
-  } catch {
-    return null;
-  }
+function esHashBcrypt(valor) {
+  return typeof valor === 'string' && /^\$2[aby]\$\d{2}\$/.test(valor);
 }
 
-module.exports = {
-  hashearPassword,
-  verificarPassword,
-  obtenerCostoHash
-};
+module.exports = { hashearPassword, verificarPassword, esHashBcrypt };

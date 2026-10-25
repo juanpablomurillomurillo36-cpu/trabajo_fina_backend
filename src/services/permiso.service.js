@@ -1,369 +1,354 @@
 /**
  * src/services/permiso.service.js
  * ---------------------------------------------------------------------
- * CAPA DE SERVICIO de la entidad Permiso.
+ * CAPA DE SERVICE de la entidad Permiso.
  *
- * QUE SABE ESTA CLASE?
- *   - QUE campos admite y como normalizarlos (lista blanca).
- *   - LAS REGLAS de negocio: nombre unico (409), no se puede borrar un
- *     permiso que este asignado a un rol (409), id inexistente (404).
- *   - QUE respuesta de error corresponde (AppError con su codigo HTTP).
+ * QUE VIVE AQUI (y que NO)?
+ *   SI viven: las reglas de negocio, la validacion de los datos que
+ *   llegan del cliente, y TODAS las consultas SQL.
+ *   NO viven: HTTP (no hay `req`, no hay `res`, no hay codigos 200) ni
+ *   los modelos de las 26 tablas. Esta capa no sabe que es una
+ *   peticion web: podria ser llamada desde un script o desde un job
+ *   programado y funcionaria igual.
  *
- * QUE NO SABE?
- *   - Nada de SQL: eso vive en PermisoRepository.
- *   - Nada de HTTP/Express: no toca req ni res. Recibe datos crudos y
- *     devuelve objetos. Gracias a eso el mismo service podria usarse
- *     desde un script, una prueba o una cola de mensajes.
+ * POR QUE NO HAY UNA CAPA "REPOSITORY" EN MEDIO?
+ * Porque en este proyecto la persistencia y la regla de negocio estan
+ * juntas a proposito. Separarlas obliga a escribir dos archivos por
+ * entidad sin aportar nada mientras la logica sea simple; si la
+ * entidad crece, la separacion se hace sin tocar los controllers.
  *
- * FLUJO DE CREAR/ACTUALIZAR (patron del ejemplo del profesor):
- *   normalizar -> validar -> reglas de negocio -> persistir
+ * TABLA `permisos`
+ * ---------------------------------------------------------------------
+ *   id_permiso      INT PK AUTO_INCREMENT
+ *   nombre_permiso  VARCHAR(80) NOT NULL UNIQUE
+ *   descripcion     VARCHAR(255) NULL
+ *   estado          ENUM('activo','inactivo') DEFAULT 'activo'
+ * No tiene fecha_creacion: es un catalogo, su historial vive en
+ * bitacora cuando corresponda.
  */
 
+const db = require('../config/database');
 const AppError = require('../utils/AppError');
 const MENSAJES = require('../utils/mensajes');
-const formato = require('../utils/formato');
-const { ColectorErrores } = require('../utils/validadores');
-const { LIMITES, ESTADO } = require('../utils/constants');
 const { Permiso } = require('../models');
-const permisoRepository = require('../repositories/PermisoRepository');
-
-// Lista blanca de campos que el cliente puede enviar.
-// Cualquier otra llave del cuerpo (id, fechaCreacion, usuarioAdmin...)
-// se descarta antes de validar: evita que un cliente "sobrescriba"
-// campos internos enviandolos en el JSON.
-const CAMPOS_PERMITIDOS = ['nombrePermiso', 'descripcion', 'estado'];
-
-// Los dos estados posibles de la columna ENUM `permisos.estado`.
-const ESTADOS_PERMITIDOS = [ESTADO.ACTIVO, ESTADO.INACTIVO];
+const { ColectorErrores } = require('../utils/validadores');
+const { ESTADO, LIMITES } = require('../utils/constants');
+const {
+  limpiarTexto,
+  soloCamposPermitidos,
+  normalizarPaginacion
+} = require('../utils/formato');
 
 class PermisoService {
   /**
-   * LISTAR con filtros opcionales y paginacion.
+   * Campos que el cliente tiene permitido escribir.
    *
-   * @param {object} filtros  req.query tal como llego.
+   * NUNCA se pasa req.body tal cual al SQL. Este listado es la
+   * proteccion contra campos de mas (id_permiso, fechas, etc.) que
+   * podrian alterar datos que no corresponden.
+   */
+  #camposPermitidos = ['nombrePermiso', 'descripcion', 'estado'];
+
+  // =================================================================
+  // LISTADO
+  // ================================================================
+
+  /**
+   * Lista permisos con filtros y paginacion.
+   *
+   * Filtros admitidos:
+   *   ?estado=activo          filtra por estado
+   *   ?busqueda=roles         busca en nombre_permiso y descripcion
+   *   ?pagina=1&limite=20     paginacion
+   *
+   * @param {object} filtros  Tipicamente req.query.
    * @returns {Promise<{permisos: Permiso[], total: number, pagina: number, limite: number}>}
    */
   async listar(filtros = {}) {
-    // ---- Paginacion ----
-    // Si el cliente no envia nada, usamos los valores por defecto.
-    const paginaSolicitada = formato.aEnteroONulo(filtros.pagina) ?? LIMITES.PAGINA_DEFECTO;
-    const limiteSolicitado = formato.aEnteroONulo(filtros.limite) ?? LIMITES.LIMITE_DEFECTO;
+    const { pagina, limite, desplazamiento } = normalizarPaginacion(
+      filtros,
+      LIMITES.LIMITE_DEFECTO,
+      LIMITES.LIMITE_PAGINA
+    );
 
-    // Math.max(1, ...) evita paginas 0 o negativas.
-    const pagina = Math.max(1, paginaSolicitada);
+    const condiciones = [];
+    const parametros = [];
 
-    // Math.min protege el servidor: aunque pidan limite=100000, el
-    // tope real es LIMITE_MAXIMO.
-    const limite = Math.min(Math.max(1, limiteSolicitado), LIMITES.LIMITE_MAXIMO);
+    // ---- Filtro por estado ----
+    // Solo se acepta si esta en la lista cerrada; asi se evita
+    // mandar al SQL un valor que MySQL rechazaria igual.
+    if (filtros.estado) {
+      const estado = limpiarTexto(String(filtros.estado));
 
-    // ---- Estado ----
-    // Si viene, debe ser un valor valido del ENUM; no tiene sentido
-    // filtrar por algo que jamas existira en la base.
-    const estado = this.#normalizarEstadoConsulta(filtros.estado);
+      if (Object.values(ESTADO).includes(estado)) {
+        condiciones.push('p.estado = ?');
+        parametros.push(estado);
+      }
+    }
 
-    // ---- Busqueda ----
-    const busqueda = formato.limpiarTexto(filtros.busqueda ?? filtros.buscar);
+    // ---- Busqueda por texto ----
+    if (filtros.busqueda && limpiarTexto(String(filtros.busqueda)) !== '') {
+      const texto = limpiarTexto(String(filtros.busqueda));
 
-    const { permisos, total } = await permisoRepository.listar({
-      estado,
-      busqueda,
+      // LIKE con % a los dos lados busca "en cualquier parte".
+      // Se escapa el caracter % para que un usuario que escriba "%"
+      // no convierta la busqueda en "traer todo".
+      condiciones.push('(p.nombre_permiso LIKE ? OR p.descripcion LIKE ?)');
+      const patron = `%${texto.replace(/[%_]/g, '\\$&')}%`;
+      parametros.push(patron, patron);
+    }
+
+    const donde = condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : '';
+
+    // ---- Total (para el objeto meta de paginacion) ----
+    const filaTotal = await db.obtenerUno(
+      `SELECT COUNT(*) AS total FROM permisos p ${donde}`,
+      parametros
+    );
+    const total = Number(filaTotal?.total ?? 0);
+
+    // ---- Filas de la pagina ----
+    //
+    // LIMIT/OFFSET se escriben directamente en la cadena y NO con ?.
+    // Motivo: mysql2 en modo execute() exige que los placeholders de
+    // LIMIT lleguen como numeros y a veces devuelve NaN; ademas
+    // `desplazamiento` y `limite` ya son enteros acotados por
+    // normalizarPaginacion, por lo que no hay riesgo de inyeccion.
+    const filas = await db.ejecutar(
+      `SELECT p.id_permiso, p.nombre_permiso, p.descripcion, p.estado
+         FROM permisos p
+         ${donde}
+        ORDER BY p.nombre_permiso
+        LIMIT ${limite} OFFSET ${desplazamiento}`,
+      parametros
+    );
+
+    return {
+      permisos: filas.map((fila) => Permiso.desdeFila(fila)),
+      total,
       pagina,
       limite
-    });
-
-    return { permisos, total, pagina, limite };
+    };
   }
 
+  // =================================================================
+  // DETALLE
+  // ================================================================
+
   /**
-   * OBTENER un permiso por id.
+   * Busca un permiso por su id.
    *
    * @param {number} id
    * @returns {Promise<Permiso>}
    * @throws {AppError} 404 si no existe.
    */
   async obtenerPorId(id) {
-    const permiso = await permisoRepository.obtenerPorId(id);
+    const fila = await db.obtenerUno(
+      'SELECT id_permiso, nombre_permiso, descripcion, estado FROM permisos WHERE id_permiso = ?',
+      [id]
+    );
 
-    // Regla de negocio: si no existe, es un 404 y no una lista vacia.
-    if (permiso === null) {
-      throw AppError.noEncontrado(MENSAJES.NEGOCIO.NO_EXISTE('permiso'));
+    if (fila === null) {
+      throw AppError.noEncontrado(MENSAJES.NEGOCIO.PERMISO_NO_EXISTE(id));
     }
 
-    return permiso;
+    return Permiso.desdeFila(fila);
   }
 
+  // =================================================================
+  // CREACION
+  // ================================================================
+
   /**
-   * CREAR un permiso nuevo.
+   * Valida y guarda un permiso nuevo.
    *
-   * @param {object} datosCrudos  req.body
-   * @returns {Promise<Permiso>}  El permiso creado, ya con su id.
+   * @param {object} datos  req.body.
+   * @returns {Promise<Permiso>} El permiso ya persistido (con id).
+   * @throws {AppError} 400 si los datos son invalidos, 409 si el
+   *                    nombre ya existe.
    */
-  async crear(datosCrudos) {
-    // 1. Normalizar: solo campos de la lista blanca, ya recortados.
-    const datos = this.#normalizar(datosCrudos);
+  async crear(datos) {
+    const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
 
-    // 2. Validar: recoge TODOS los errores de una sola vez.
-    this.#validarCreacion(datos);
+    const permiso = this.#validar(entrada);
 
-    // 3. Regla de negocio: el nombre debe ser unico.
-    await this.#verificarNombreUnico(datos.nombrePermiso);
+    await this.#asegurarNombreUnico(permiso.nombrePermiso, null);
 
-    // 4. Instanciar el objeto del dominio.
-    const permiso = Permiso.desdeJSON(datos);
+    const resultado = await db.ejecutar(
+      'INSERT INTO permisos (nombre_permiso, descripcion, estado) VALUES (?, ?, ?)',
+      [permiso.nombrePermiso, permiso.descripcion, permiso.estado]
+    );
 
-    // 5. Persistir: el repository devuelve el id autogenerado y lo
-    //    asignamos POR EL SETTER (no tocamos el atributo privado).
-    permiso.id = await permisoRepository.crear(permiso);
-
-    return permiso;
+    // insertId lo devuelve mysql2 en los metadatos del INSERT.
+    return this.obtenerPorId(resultado.insertId);
   }
 
+  // =================================================================
+  // ACTUALIZACION
+  // ================================================================
+
   /**
-   * ACTUALIZAR un permiso existente (actualizacion completa o parcial).
+   * Actualizacion PARCIAL (PUT): solo se modifican los campos que
+   * llegaron. Postman, por ejemplo, manda un PUT con unicamente
+   * `descripcion` y el nombre no debe tocarse.
    *
    * @param {number} id
-   * @param {object} datosCrudos  req.body
-   * @returns {Promise<Permiso>}  El permiso ya actualizado.
+   * @param {object} datos
+   * @returns {Promise<Permiso>}
+   * @throws {AppError} 404, 400 o 409.
    */
-  async actualizar(id, datosCrudos) {
-    // 1. Verificar que exista. Si no, obtenerPorId lanza el 404.
-    const permisoActual = await this.obtenerPorId(id);
+  async actualizar(id, datos) {
+    const existente = await this.obtenerPorId(id);
 
-    // 2. Normalizar y validar solo lo que llego.
-    const datos = this.#normalizar(datosCrudos);
-    this.#validarActualizacion(datos);
+    const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
 
-    // 3. Regla de negocio: si cambio el nombre, no puede chocar con otro.
-    //    Se EXCLUYE el propio id, o sino siempre chocaria consigo mismo.
-    if (Object.hasOwn(datos, 'nombrePermiso')) {
-      await this.#verificarNombreUnico(datos.nombrePermiso, id);
+    if (Object.keys(entrada).length === 0) {
+      throw AppError.cuerpoInvalido(
+        'La peticion no incluye ningun campo actualizable. Se admiten: ' +
+          this.#camposPermitidos.join(', ')
+      );
     }
 
-    // 4. Aplicar los cambios al objeto EXISTENTE en vez de crear uno
-    //    nuevo: asi los campos que no llegaron conservan su valor.
-    if (Object.hasOwn(datos, 'nombrePermiso')) {
-      permisoActual.nombrePermiso = datos.nombrePermiso;
-    }
-    if (Object.hasOwn(datos, 'descripcion')) {
-      permisoActual.descripcion = datos.descripcion;
-    }
-    if (Object.hasOwn(datos, 'estado')) {
-      permisoActual.estado = datos.estado;
+    // Se parte del registro EXISTENTE y se pisan solo los campos que
+    // llegaron: asi las validaciones siempre ven el conjunto completo.
+    const paraValidar = {
+      nombrePermiso: entrada.nombrePermiso ?? existente.nombrePermiso,
+      descripcion: entrada.descripcion ?? existente.descripcion,
+      estado: entrada.estado ?? existente.estado
+    };
+
+    const permiso = this.#validar(paraValidar);
+
+    // Solo se revisa la unicidad si el nombre cambio; comprobarlo
+    // aunque fuera igual generaria una consulta inutil en cada PUT.
+    if (permiso.nombrePermiso !== existente.nombrePermiso) {
+      await this.#asegurarNombreUnico(permiso.nombrePermiso, id);
     }
 
-    // 5. Persistir. Si affectedRows fuera 0 significaria que los valores
-    //    eran identicos a los ya guardados: no es un error, seguimos.
-    await permisoRepository.actualizar(id, permisoActual);
+    await db.ejecutar(
+      'UPDATE permisos SET nombre_permiso = ?, descripcion = ?, estado = ? WHERE id_permiso = ?',
+      [permiso.nombrePermiso, permiso.descripcion, permiso.estado, id]
+    );
 
-    return permisoActual;
+    return this.obtenerPorId(id);
   }
 
+  // =================================================================
+  // CAMBIO DE ESTADO (PATCH)
+  // ================================================================
+
   /**
-   * CAMBIAR el estado (activo / inactivo) sin tocar los demas campos.
+   * Cambia solo el estado del permiso. Es la operacion de "baja
+   * logica": el registro sigue existiendo, solo deja de estar activo.
    *
    * @param {number} id
-   * @param {object} datosCrudos  { estado: 'activo' | 'inactivo' }
+   * @param {string} estado  'activo' | 'inactivo'
    * @returns {Promise<Permiso>}
    */
-  async cambiarEstado(id, datosCrudos) {
-    const permiso = await this.obtenerPorId(id);
+  async cambiarEstado(id, estado) {
+    await this.obtenerPorId(id); // 404 si no existe
 
     const errores = new ColectorErrores();
-    errores.exigirValorDeLista('estado', datosCrudos?.estado, ESTADOS_PERMITIDOS);
-    errores.lanzarSiHay('No se pudo cambiar el estado del permiso.');
+    errores.exigirValorDeLista('estado', estado, Object.values(ESTADO));
+    errores.lanzarSiHayErrores();
 
-    await permisoRepository.cambiarEstado(id, datosCrudos.estado);
+    await db.ejecutar('UPDATE permisos SET estado = ? WHERE id_permiso = ?', [estado, id]);
 
-    // Devolvemos el objeto con el nuevo estado. No se vuelve a consultar
-    // la base: sabemos con certeza que acaba de cambiar.
-    permiso.estado = datosCrudos.estado;
-
-    return permiso;
+    return this.obtenerPorId(id);
   }
 
+  // =================================================================
+  // ELIMINACION
+  // ================================================================
+
   /**
-   * ELIMINAR un permiso.
+   * Borra un permiso.
+   *
+   * NOTA DE INTEGRIDAD: `rol_permiso` tiene ON DELETE CASCADE en la
+   * llave foranea hacia permisos. Si el permiso estaba asignado a
+   * cinco roles, MySQL borra solo esas cinco filas puente. Por eso
+   * aqui NUNCA puede fallar por "registro en uso": no hace falta
+   * rechazar nada con 409.
    *
    * @param {number} id
-   * @returns {Promise<{id: number, nombrePermiso: string, rolesAfectados: number}>}
-   * @throws {AppError} 404 si no existe, 409 si esta asignado a roles.
+   * @returns {Promise<{idEliminado:number, mensaje:string}>}
+   * @throws {AppError} 404 si no existe.
    */
   async eliminar(id) {
-    const permiso = await this.obtenerPorId(id);
+    const existente = await this.obtenerPorId(id);
 
-    // Regla de negocio: no se puede borrar un permiso que los roles ya
-    // usan, porque MySQL lo quitaria en cascada de TODOS esos roles
-    // (ON DELETE CASCADE) sin avisar. Mejor frenar y avisar.
-    const rolesAfectados = await permisoRepository.contarRolesAsignados(id);
-
-    if (rolesAfectados > 0) {
-      throw AppError.conflicto(MENSAJES.NEGOCIO.PERMISO_EN_USO, [
-        {
-          campo: 'roles',
-          mensaje: `El permiso esta asignado a ${rolesAfectados} rol(es). Quitalo de ellos o desactivalo antes de eliminarlo.`
-        }
-      ]);
-    }
-
-    await permisoRepository.eliminar(id);
+    await db.ejecutar('DELETE FROM permisos WHERE id_permiso = ?', [id]);
 
     return {
-      id: permiso.id,
-      nombrePermiso: permiso.nombrePermiso,
-      rolesAfectados
+      idEliminado: existente.id,
+      nombrePermiso: existente.nombrePermiso,
+      mensaje: 'Permiso eliminado junto con sus asignaciones a roles'
     };
   }
 
-  // ==================================================================
-  // METODOS PRIVADOS  (solo se usan dentro de esta clase)
-  // ==================================================================
+  // =================================================================
+  // METODOS PRIVADOS DE APOYO
+  // ================================================================
 
   /**
-   * Filtra el cuerpo contra la lista blanca: conserva unicamente los
-   * campos que esta API sabe manejar y descarta todo lo demas.
+   * Valida una tanda de campos y devuelve un objeto Permiso listo.
    *
-   * @param {object} datosCrudos  req.body
-   * @returns {object} Solo los campos permitidos, ya recortados.
-   */
-  #normalizar(datosCrudos) {
-    const filtrados = formato.soloCamposPermitidos(datosCrudos, CAMPOS_PERMITIDOS);
-    const limpios = {};
-
-    // Object.hasOwn comprueba si la llave REALMENTE llego. Esto es
-    // clave para el PUT parcial: si el cliente no envio `descripcion`,
-    // no la convertimos en null y no borramos el dato existente.
-    if (Object.hasOwn(filtrados, 'nombrePermiso')) {
-      limpios.nombrePermiso = formato.limpiarTexto(filtrados.nombrePermiso);
-    }
-
-    if (Object.hasOwn(filtrados, 'descripcion')) {
-      limpios.descripcion = formato.limpiarTexto(filtrados.descripcion);
-    }
-
-    if (Object.hasOwn(filtrados, 'estado')) {
-      limpios.estado = filtrados.estado;
-    }
-
-    return limpios;
-  }
-
-  /**
-   * Valida la CREACION: aqui todos los campos obligatorios que la
-   * base marca como NOT NULL.
+   * Se hace en un solo paso porque el ColectorErrores junta TODOS los
+   * problemas y los lanza de una sola vez, en vez de devolver un
+   * error cada vez.
    *
-   * @param {object} datos  Ya normalizados.
-   * @throws {AppError} 400 con la lista COMPLETA de errores.
+   * @param {object} entrada
+   * @returns {Permiso}
+   * @throws {AppError} 400 con el detalle campo a campo.
    */
-  #validarCreacion(datos) {
+  #validar(entrada) {
     const errores = new ColectorErrores();
 
-    // Columna permisos.nombre_permiso: VARCHAR(80) NOT NULL.
-    errores.exigirTexto('nombrePermiso', datos.nombrePermiso, {
-      maximo: LIMITES.VARCHAR_MEDIO
+    errores.exigirTexto('nombrePermiso', entrada.nombrePermiso, {
+      maximo: LIMITES.NOMBRE_PERMISO
     });
 
-    // Columna permisos.descripcion: VARCHAR(255) NULL -> opcional.
-    errores.exigirTexto('descripcion', datos.descripcion, {
-      requerido: false,
-      maximo: LIMITES.VARCHAR_DESCRIPCION
-    });
-
-    // Columna permisos.estado: ENUM con valor por defecto 'activo'.
-    errores.exigirValorDeLista('estado', datos.estado, ESTADOS_PERMITIDOS, {
+    errores.exigirTexto('descripcion', entrada.descripcion, {
+      maximo: LIMITES.DESCRIPCION,
       requerido: false
     });
 
-    errores.lanzarSiHay('No se pudo crear el permiso porque hay datos invalidos.');
+    if (entrada.estado !== undefined && entrada.estado !== null && entrada.estado !== '') {
+      errores.exigirValorDeLista('estado', entrada.estado, Object.values(ESTADO));
+    }
+
+    errores.lanzarSiHayErrores();
+
+    // normalizar con el modelo (trim) y no con limpiarTexto del
+    // service, para que el resultado sea identico venga de donde
+    // venga: mismo objeto, misma normalizacion.
+    return Permiso.desdeJSON({
+      nombrePermiso: String(entrada.nombrePermiso).trim(),
+      descripcion:
+        entrada.descripcion === undefined || entrada.descripcion === null
+          ? null
+          : String(entrada.descripcion).trim(),
+      estado: entrada.estado || ESTADO.ACTIVO
+    });
   }
 
   /**
-   * Valida la ACTUALIZACION. Todos los campos son opcionales (PUT
-   * parcial), pero si vienen, tienen que ser validos.
+   * Comprueba que el nombre del permiso no este tomado.
    *
-   * @param {object} datos  Ya normalizados.
-   * @throws {AppError} 400
+   * @param {string} nombre
+   * @param {number|null} idExcluido  El propio id cuando es un PUT.
+   * @throws {AppError} 409 si ya existe.
    */
-  #validarActualizacion(datos) {
-    // Enviar un cuerpo sin ningun campo util no tiene sentido.
-    if (formato.estaVacio(datos)) {
-      throw AppError.validacion('Debes enviar al menos un campo valido para actualizar.', [
-        { campo: 'cuerpo', mensaje: `Campos admitidos: ${CAMPOS_PERMITIDOS.join(', ')}.` }
-      ]);
+  async #asegurarNombreUnico(nombre, idExcluido) {
+    const fila = await db.obtenerUno(
+      'SELECT id_permiso FROM permisos WHERE nombre_permiso = ? AND id_permiso <> ?',
+      [nombre, idExcluido ?? -1]
+    );
+
+    if (fila !== null) {
+      throw AppError.conflicto(MENSAJES.NEGOCIO.PERMISO_DUPLICADO(nombre));
     }
-
-    const errores = new ColectorErrores();
-
-    // El patron es: "si el cliente envio este campo, validalo".
-    if (Object.hasOwn(datos, 'nombrePermiso')) {
-      errores.exigirTexto('nombrePermiso', datos.nombrePermiso, {
-        maximo: LIMITES.VARCHAR_MEDIO
-      });
-    }
-
-    if (Object.hasOwn(datos, 'descripcion')) {
-      errores.exigirTexto('descripcion', datos.descripcion, {
-        requerido: false,
-        maximo: LIMITES.VARCHAR_DESCRIPCION
-      });
-    }
-
-    if (Object.hasOwn(datos, 'estado')) {
-      errores.exigirValorDeLista('estado', datos.estado, ESTADOS_PERMITIDOS);
-    }
-
-    errores.lanzarSiHay('No se pudo actualizar el permiso porque hay datos invalidos.');
-  }
-
-  /**
-   * Comprueba la unicidad del nombre y lanza 409 si ya existe.
-   *
-   * Se consulta en la base (no en memoria) porque puede haber 1000
-   * permisos y cargarlos todos solo para comparar uno seria absurdo.
-   * La propiedad UNIQUE de la columna es el respaldo final.
-   *
-   * @param {string}      nombre
-   * @param {number|null} [idExcluido]  Se ignora en la edicion.
-   * @throws {AppError} 409
-   */
-  async #verificarNombreUnico(nombre, idExcluido = null) {
-    const yaExiste = await permisoRepository.existeNombre(nombre, idExcluido);
-
-    if (yaExiste) {
-      throw AppError.conflicto(MENSAJES.NEGOCIO.NOMBRE_DUPLICADO('permiso', nombre), [
-        { campo: 'nombrePermiso', mensaje: 'Ese nombre ya esta en uso por otro permiso.' }
-      ]);
-    }
-  }
-
-  /**
-   * Normaliza y valida el estado que llega en la QUERY de listado.
-   *
-   * @param {*} valor  Lo que llego en ?estado=
-   * @returns {string|null} El estado valido, o null para no filtrar.
-   * @throws {AppError} 400 si el valor no pertenece al ENUM.
-   */
-  #normalizarEstadoConsulta(valor) {
-    const texto = formato.limpiarTexto(valor);
-
-    // Sin filtro: se listan todos (activos e inactivos).
-    if (texto === null) {
-      return null;
-    }
-
-    if (!ESTADOS_PERMITIDOS.includes(texto)) {
-      throw AppError.validacion('El filtro de estado no es valido.', [
-        {
-          campo: 'estado',
-          mensaje: `Valores admitidos: ${ESTADOS_PERMITIDOS.join(', ')}.`
-        }
-      ]);
-    }
-
-    return texto;
   }
 }
 
-// ---------------------------------------------------------------------
-// SINGLETON: se exporta una instancia, no la clase.
-// ---------------------------------------------------------------------
 module.exports = new PermisoService();

@@ -14,14 +14,14 @@
 | **Descripción** | Texto funcional, resumido |
 | **Endpoint(s)** | Ruta(s) HTTP que lo implementan |
 | **Fase** | Fase del plan (`PLAN-TRABAJO.md` §8) que lo construye |
-| **Evidencia** | Petición de la colección Postman (`docs/postman/`) u otra prueba que lo verifica |
+| **Evidencia** | Petición manual en Postman (URL y body en `PRUEBAS.md`) u otra prueba que lo verifica |
 
 **Reglas de la matriz:**
 
 1. Todo RF de la sección 4 del SRS aparece aquí. Ninguno se omite (93 filas).
 2. Un RF puede cubrirse con varios endpoints; se listan todos.
-3. La columna Evidencia cita peticiones que quedaron **en verde** en la prueba global
-   de la colección (135 peticiones / 213 afirmaciones, 0 fallos).
+3. La columna Evidencia cita peticiones ejecutadas **a mano en Postman** contra el
+   servidor corriendo; `PRUEBAS.md` trae la URL y el body de cada una.
 4. Los IDs anómalos del SRS (duplicados, con punto, sin guion, con 3 dígitos) se
    conservan sin corregir para poder citar el documento fuente sin ambigüedad.
 
