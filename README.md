@@ -440,13 +440,14 @@ const CONTEO_PERMISOS =
 
 class RolService {
   #camposPermitidos = ['nombreRol', 'descripcion', 'estado'];
+  #mapaColumnas     = { nombreRol: 'nombre_rol', descripcion, estado };
 
   async listar(filtros)        { /* estado, busqueda, paginacion */ }
   async obtenerPorId(id)       { /* + carga los permisos con JOIN */ }
-  async crear(datos)           { /* valida -> unicidad -> INSERT -> 201 */ }
-  async actualizar(id, datos)  { /* actualizacion PARCIAL */ }
-  async cambiarEstado(id, e)   { /* 'activo' | 'inactivo' */ }
-  async eliminar(id)           { /* cascada en rol_permiso; 409 si tiene usuarios */ }
+  async crear(datos)           { /* valida -> desdeJSON -> INSERT -> devuelve la INSTANCIA con id y fechaCreacion */ }
+  async actualizar(id, datos)  { /* PARCIAL: setters + UPDATE dinamico -> relee con obtenerPorId */ }
+  async cambiarEstado(id, e)   { /* activar()/desactivar() -> devuelve la MISMA instancia */ }
+  async eliminar(id)           { /* cascada en rol_permiso; 409 si tiene usuarios -> { id, nombreRol, permisosLiberados } */ }
   async asignarPermiso(idRol, idPermiso)  { /* transaccion -> devuelve el rol */ }
   async quitarPermiso(idRol, idPermiso)   { /* transaccion -> devuelve el ARREGLO restante */ }
 }
@@ -523,14 +524,15 @@ Tabla `permisos`: `id_permiso` PK, `nombre_permiso` VARCHAR(80) **UNIQUE**,
 ```js
 class PermisoService {
   #camposPermitidos = ['nombrePermiso', 'descripcion', 'estado'];
+  #mapaColumnas     = { nombrePermiso: 'nombre_permiso', descripcion, estado };
 
   async listar(filtros)   { /* ORDER BY nombre_permiso: el listado de Postman usa
                                lista[0] y lista[1] como permisoAsignarId/2Id */ }
   async obtenerPorId(id)  { /* 404 si no existe */ }
-  async crear(datos)      { /* 409 si nombre duplicado */ }
-  async actualizar(id, d) { /* parcial */ }
-  async cambiarEstado(id, e) { /* activo | inactivo */ }
-  async eliminar(id)      { /* rol_permiso tiene CASCADE -> nunca 409 */ }
+  async crear(datos)      { /* desdeJSON -> INSERT -> devuelve la INSTANCIA; 409 si nombre duplicado */ }
+  async actualizar(id, d) { /* PARCIAL: setters + UPDATE dinamico -> relee */ }
+  async cambiarEstado(id, e) { /* activar()/desactivar() -> devuelve la MISMA instancia */ }
+  async eliminar(id)      { /* rol_permiso tiene CASCADE -> nunca 409 -> { id, nombrePermiso } */ }
 }
 ```
 
@@ -564,14 +566,21 @@ const COLUMNAS_USUARIO = `
 **Regla #1:** la contraseña jamás viaja en claro.
 
 ```js
-// al crear
-datosNormalizados.contrasenaHash = await cifrado.hashearPassword(datosNormalizados.contrasena);
+// al crear: el hash se hashea ANTES de instanciar el modelo
+const contrasenaHash = await cifrado.hashearPassword(normalizados.contrasena);
+const usuario = Usuario.desdeJSON({ ...datos, contrasenaHash });
+usuario.fechaCreacion = fechas.ahoraISO();
 
-// al actualizar (solo si el PUT la trajo)
-if (datosNormalizados.contrasena) {
-  const hash = await cifrado.hashearPassword(datosNormalizados.contrasena);
-  await db.ejecutar('UPDATE usuarios SET contrasena_hash = ? WHERE id_usuario = ?', [hash, id]);
+const fila = usuario.aFilaBaseDatos();          // { ..., contrasena_hash, ... }
+// INSERT usando fila.*   ->   usuario.id = resultado.insertId;
+return usuario;                                  // la instancia, sin re-leer
+
+// al actualizar (solo si el PUT la trajo): el hash entra en el MISMO UPDATE
+if (entrada.contrasena !== undefined) {
+  usuario.contrasenaHash = await cifrado.hashearPassword(normalizados.contrasena);
 }
+// UPDATE dinamico: solo las columnas de los campos que llegaron
+// (contrasena -> contrasena_hash, idRol -> id_rol, ...)
 ```
 
 Validación de contraseña (regla `R-CLAVE-01`): **8+ caracteres, al menos una letra y un
@@ -579,6 +588,15 @@ número** → `Clave1234` pasa, `123` no.
 
 `PUT /api/usuarios/:id` es **parcial**: Postman manda solo `{"telefono": "..."}` y el
 resto de los campos se conservan.
+
+**Qué devuelve cada operación** (mismo contrato que el proyecto de ejemplo):
+
+| Operación | Devuelve |
+|---|---|
+| `POST` | la **instancia creada** con `id` y `fechaCreacion` (sin re-leer; por eso **no trae `nombreRol`**, que solo llega del `INNER JOIN` de los `GET`) |
+| `PUT` | el usuario **releído** con `obtenerPorId` |
+| `PATCH /estado` | la **misma instancia** ya con `activar()`/`desactivar()` aplicado |
+| `DELETE` | `{ id, nombreCompleto, email }` (llave `id`, sin `mensaje`) |
 
 ### 10.2 Endpoints
 

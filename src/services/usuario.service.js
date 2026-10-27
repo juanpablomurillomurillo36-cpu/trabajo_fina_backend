@@ -31,6 +31,7 @@ const { Usuario } = require('../models');
 const { ColectorErrores } = require('../utils/validadores');
 const { ESTADO, LIMITES } = require('../utils/constants');
 const cifrado = require('../utils/cifrado');
+const fechas = require('../utils/fechas');
 const {
   limpiarTexto,
   soloCamposPermitidos,
@@ -48,6 +49,23 @@ const COLUMNAS_USUARIO = `
 
 class UsuarioService {
   #camposPermitidos = ['nombre', 'apellido', 'email', 'telefono', 'idRol', 'estado', 'contrasena'];
+
+  /**
+   * Traduce cada campo del body a su columna real.
+   *
+   * Se usa en el UPDATE DINAMICO: solo se escribe lo que llego, con el
+   * nombre de columna correcto (y `contrasena` apunta al HASH, que es
+   * lo unico que la base acepta).
+   */
+  #mapaColumnas = {
+    nombre: 'nombre',
+    apellido: 'apellido',
+    email: 'email',
+    telefono: 'telefono',
+    idRol: 'id_rol',
+    estado: 'estado',
+    contrasena: 'contrasena_hash'
+  };
 
   // =================================================================
   // LISTADO
@@ -111,7 +129,7 @@ class UsuarioService {
       parametros
     );
     const total = Number(filaTotal?.total ?? 0);
-
+ 
     const filas = await db.ejecutar(
       `SELECT ${COLUMNAS_USUARIO}
          FROM usuarios u
@@ -169,7 +187,9 @@ class UsuarioService {
    * si el formato esta mal no se gasta un viaje a la base.
    *
    * @param {object} datos  req.body.
-   * @returns {Promise<Usuario>}
+   * @returns {Promise<Usuario>} El usuario creado, ya con su id y su
+   *          fechaCreacion: se devuelve la INSTANCIA construida aqui,
+   *          sin re-leer la fila (mismo estilo que el ejemplo).
    * @throws {AppError} 400 datos invalidos o rol inexistente,
    *                    409 correo ya registrado.
    */
@@ -182,26 +202,49 @@ class UsuarioService {
     await this.#asegurarRolExistente(datosNormalizados.idRol);
 
     // hashearPassword es async (bcrypt trabaja fuera del hilo principal).
-    datosNormalizados.contrasenaHash = await cifrado.hashearPassword(
-      datosNormalizados.contrasena
-    );
+    const contrasenaHash = await cifrado.hashearPassword(datosNormalizados.contrasena);
+
+    // 1. Instanciar el objeto del dominio. La clave en CLARO jamas
+    //    llega al modelo: solo viaja su hash (Usuario.js lo exige).
+    const usuario = Usuario.desdeJSON({
+      idRol: datosNormalizados.idRol,
+      nombre: datosNormalizados.nombre,
+      apellido: datosNormalizados.apellido,
+      email: datosNormalizados.email,
+      telefono: datosNormalizados.telefono,
+      estado: datosNormalizados.estado,
+      contrasenaHash
+    });
+
+    // La fecha la pone el service (misma maquina que MySQL, cuyo
+    // DEFAULT CURRENT_TIMESTAMP rellena la columna).
+    usuario.fechaCreacion = fechas.ahoraISO();
+
+    // 2. Persistir: aFilaBaseDatos() traduce el objeto a columnas.
+    const fila = usuario.aFilaBaseDatos();
 
     const resultado = await db.ejecutar(
       `INSERT INTO usuarios
          (id_rol, nombre, apellido, email, contrasena_hash, telefono, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
-        datosNormalizados.idRol,
-        datosNormalizados.nombre,
-        datosNormalizados.apellido,
-        datosNormalizados.email,
-        datosNormalizados.contrasenaHash,
-        datosNormalizados.telefono,
-        datosNormalizados.estado
+        fila.id_rol,
+        fila.nombre,
+        fila.apellido,
+        fila.email,
+        fila.contrasena_hash,
+        fila.telefono,
+        fila.estado
       ]
     );
 
-    return this.obtenerPorId(resultado.insertId);
+    // MySQL nos devuelve el id que genero el AUTO_INCREMENT.
+    // Lo asignamos POR EL SETTER, no tocando el atributo privado.
+    usuario.id = resultado.insertId;
+
+    // Se devuelve la instancia creada (sin re-leer), igual que el
+    // proyecto de ejemplo del profesor.
+    return usuario;
   }
 
   // =================================================================
@@ -221,7 +264,8 @@ class UsuarioService {
    * @returns {Promise<Usuario>}
    */
   async actualizar(id, datos) {
-    const existente = await this.obtenerPorId(id);
+    // 1. Verificar que exista. Si no, obtenerPorId lanza el 404.
+    const usuario = await this.obtenerPorId(id);
 
     const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
 
@@ -232,15 +276,18 @@ class UsuarioService {
       );
     }
 
+    // 2. Normalizar y validar el conjunto COMPLETO (lo que llego mas
+    //    lo que ya existia), para que ninguna validacion vea campos
+    //    vacios.
     const esCreacion = false;
-    const datosNormalizados = this.#validar(
+    const normalizados = this.#validar(
       {
-        nombre: entrada.nombre ?? existente.nombre,
-        apellido: entrada.apellido ?? existente.apellido,
-        email: entrada.email ?? existente.email,
-        telefono: entrada.telefono ?? existente.telefono,
-        idRol: entrada.idRol ?? existente.idRol,
-        estado: entrada.estado ?? existente.estado,
+        nombre: entrada.nombre ?? usuario.nombre,
+        apellido: entrada.apellido ?? usuario.apellido,
+        email: entrada.email ?? usuario.email,
+        telefono: entrada.telefono ?? usuario.telefono,
+        idRol: entrada.idRol ?? usuario.idRol,
+        estado: entrada.estado ?? usuario.estado,
         // La contrasena solo se valida si viene: un PUT que no la
         // trae no debe exigir la regla de 8 caracteres.
         contrasena: entrada.contrasena
@@ -248,40 +295,53 @@ class UsuarioService {
       { esCreacion, traeContrasena: entrada.contrasena !== undefined }
     );
 
-    if (entrada.email !== undefined && datosNormalizados.email !== existente.email) {
-      await this.#asegurarCorreoUnico(datosNormalizados.email, id);
+    if (entrada.email !== undefined && normalizados.email !== usuario.email) {
+      await this.#asegurarCorreoUnico(normalizados.email, id);
     }
 
     if (entrada.idRol !== undefined) {
-      await this.#asegurarRolExistente(datosNormalizados.idRol);
+      await this.#asegurarRolExistente(normalizados.idRol);
     }
 
-    await db.ejecutar(
-      `UPDATE usuarios
-          SET id_rol = ?, nombre = ?, apellido = ?, email = ?, telefono = ?, estado = ?
-        WHERE id_usuario = ?`,
-      [
-        datosNormalizados.idRol,
-        datosNormalizados.nombre,
-        datosNormalizados.apellido,
-        datosNormalizados.email,
-        datosNormalizados.telefono,
-        datosNormalizados.estado,
-        id
-      ]
-    );
-
-    // La contrasena se UPDATEA aparte, con su propio hash, para no
-    // arrastrar la columna contrasena_hash en cada PUT normal.
-    if (datosNormalizados.contrasena) {
-      const hash = await cifrado.hashearPassword(datosNormalizados.contrasena);
-
-      await db.ejecutar('UPDATE usuarios SET contrasena_hash = ? WHERE id_usuario = ?', [
-        hash,
-        id
-      ]);
+    // 3. Aplicar los cambios AL OBJETO usando sus SETTERS. Solo se
+    //    tocan los campos que llegaron: el resto conserva el valor de
+    //    la fila.
+    if (entrada.contrasena !== undefined) {
+      // Se guarda el HASH, nunca la clave en claro.
+      usuario.contrasenaHash = await cifrado.hashearPassword(normalizados.contrasena);
     }
 
+    for (const campo of Object.keys(entrada)) {
+      if (campo === 'contrasena') continue; // ya aplicada como hash
+      usuario[campo] = normalizados[campo];
+    }
+
+    // 4. UPDATE DINAMICO: solo las columnas que efectivamente
+    //    cambiaron, con sus valores salidos de aFilaBaseDatos().
+    //    Si la contrasena vino, su hash entra en el MISMO UPDATE.
+    const fila = usuario.aFilaBaseDatos();
+    const asignaciones = [];
+    const parametros = [];
+
+    for (const campo of Object.keys(entrada)) {
+      const columna = this.#mapaColumnas[campo];
+      if (!columna) continue;
+
+      asignaciones.push(`${columna} = ?`);
+      parametros.push(fila[columna]);
+    }
+
+    if (asignaciones.length > 0) {
+      parametros.push(id);
+
+      await db.ejecutar(
+        `UPDATE usuarios SET ${asignaciones.join(', ')} WHERE id_usuario = ?`,
+        parametros
+      );
+    }
+
+    // Se relee al final, igual que el proyecto de ejemplo: asi la
+    // respuesta refleja lo que quedo realmente guardado en la base.
     return this.obtenerPorId(id);
   }
 
@@ -294,18 +354,29 @@ class UsuarioService {
    *
    * @param {number} id
    * @param {string} estado
-   * @returns {Promise<Usuario>}
+   * @returns {Promise<Usuario>} La MISMA instancia con el estado ya
+   *          cambiado (no se re-lee la fila), como en el ejemplo.
    */
   async cambiarEstado(id, estado) {
-    await this.obtenerPorId(id);
+    const usuario = await this.obtenerPorId(id);
 
     const errores = new ColectorErrores();
     errores.exigirValorDeLista('estado', estado, Object.values(ESTADO));
     errores.lanzarSiHayErrores();
 
-    await db.ejecutar('UPDATE usuarios SET estado = ? WHERE id_usuario = ?', [estado, id]);
+    // El objeto decide como representar su propio estado.
+    if (estado === ESTADO.ACTIVO) {
+      usuario.activar();
+    } else {
+      usuario.desactivar();
+    }
 
-    return this.obtenerPorId(id);
+    await db.ejecutar('UPDATE usuarios SET estado = ? WHERE id_usuario = ?', [
+      usuario.estado,
+      id
+    ]);
+
+    return usuario;
   }
 
   // =================================================================
@@ -321,7 +392,8 @@ class UsuarioService {
    * middleware lo traduce a 409 con un mensaje claro.
    *
    * @param {number} id
-   * @returns {Promise<object>}
+   * @returns {Promise<object>} Resumen en el MISMO estilo que el
+   *          ejemplo: llave `id` y sin campo `mensaje`.
    */
   async eliminar(id) {
     const existente = await this.obtenerPorId(id);
@@ -329,9 +401,9 @@ class UsuarioService {
     await db.ejecutar('DELETE FROM usuarios WHERE id_usuario = ?', [id]);
 
     return {
-      idEliminado: existente.id,
-      email: existente.email,
-      mensaje: 'Usuario eliminado'
+      id: existente.id,
+      nombreCompleto: existente.nombreCompleto,
+      email: existente.email
     };
   }
 

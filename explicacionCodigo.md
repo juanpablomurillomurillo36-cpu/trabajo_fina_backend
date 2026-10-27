@@ -534,6 +534,9 @@ sabe SQL ni HTTP.**
     (`nombre_rol` → `nombreRol`). Es el **único** lugar donde conviven los dos
     estilos, y también lee `total_permisos` cuando viene de la subconsulta.
   - `Rol.desdeJSON(datos)` — construye desde `req.body` ya normalizado.
+    Es la fábrica que usa `rol.service.crear()` (y también
+    `permiso.service.crear()` y `usuario.service.crear()` con sus
+    modelos) justo antes de persistir.
 - **`aFilaBaseDatos()`** devuelve el formato de columna para INSERT/UPDATE, sin
   `id` (autoincremental) ni `fecha_creacion` (es `DEFAULT CURRENT_TIMESTAMP` y
   en un UPDATE **no** debe cambiar).
@@ -559,6 +562,24 @@ Los otros 25 modelos (`Permiso`, `Usuario`, `Cliente`, `Producto`, `Venta`,
 Es la capa con más lógica: valida, garantiza unicidad, usa transacciones y
 **lanza `AppError`** cuando algo falla. Nunca toca `res` ni sabe qué es HTTP.
 
+### Qué devuelve cada método (contrato, igual que el ejemplo)
+
+Los tres services (`rol`, `permiso`, `usuario`) devuelven **exactamente lo
+mismo que devolvería el `persona-api` del profesor**:
+
+| Método | Qué devuelve |
+|---|---|
+| `listar` | `{ roles|permisos|usuarios, total, pagina, limite }` |
+| `obtenerPorId` | la **instancia** del modelo (o 404 si no existe) |
+| `crear` | la **instancia construida** con `id = insertId` y su `fechaCreacion`; **no se re-lee la fila** |
+| `actualizar` | `return this.obtenerPorId(id)`, la fila **releída** al final |
+| `cambiarEstado` | la **misma instancia en memoria** con el estado ya cambiado (tras `activar()`/`desactivar()`); no se re-lee |
+| `eliminar` | un resumen plano `{ id, … }` **sin** campo `mensaje` |
+
+El `POST` de usuario es el único que cambió de aspecto respecto a una
+relectura: como la instancia recién creada no pasa por el `INNER JOIN`,
+la respuesta **no trae `nombreRol`** (todos los `GET` sí lo traen).
+
 ### 10.1 `rol.service.js`
 
 Arriba declara tres constantes que evitan repetir SQL:
@@ -578,13 +599,13 @@ evita el problema N+1.
 |---|---|
 | `listar(filtros)` | normaliza paginación → arma `WHERE` dinámico (solo si `estado` es un valor válido y `busqueda` no está vacío; el patrón `LIKE` escapa `%` y `_`) → `COUNT(*)` para el total → `SELECT … LIMIT/OFFSET` → mapea a `Rol.desdeFila`. |
 | `obtenerPorId(id)` | trae el rol; si `null` → `throw AppError.noEncontrado(ROL_NO_EXISTE(id))`; luego carga los permisos en una segunda consulta y los agrega con `rol.agregarPermiso(...)`. |
-| `crear(datos)` | `soloCamposPermitidos` → `#validar` → `#asegurarNombreUnico` → `INSERT` → devuelve `obtenerPorId(insertId)` (el rol recién creado, con su conteo). |
-| `actualizar(id, datos)` | existe → filtra campos; si no vino **ninguno** → 400 “ningún campo actualizable”; completa lo que faltó con el valor existente, valida el conjunto completo y solo comprueba unicidad si el nombre **cambió** → `UPDATE` → reconsulta. |
-| `cambiarEstado(id, estado)` | existe → `exigirValorDeLista` con los valores de `ESTADO` → `UPDATE` solo de `estado` (el resto del body se ignora). |
-| `eliminar(id)` | existe → `DELETE`; `rol_permiso` cae por `ON DELETE CASCADE`; si el rol tiene usuarios, MySQL responde `ER_ROW_IS_REFERENCED` → 409. Devuelve un resumen (`idEliminado`, `permisosLiberados`…) en lugar de 204, para que en las pruebas **se vea** qué se borró. |
+| `crear(datos)` | `soloCamposPermitidos` → `#validar` (objeto plano) → `#asegurarNombreUnico` → `Rol.desdeJSON` → `fechaCreacion = fechas.ahoraISO()` → `aFilaBaseDatos()` → `INSERT` → `rol.id = insertId` → **devuelve la instancia creada sin re-leerla** (como el ejemplo). |
+| `actualizar(id, datos)` | existe → filtra campos; si no vino **ninguno** → 400 “ningún campo actualizable”; completa lo que faltó con el valor existente, valida el conjunto completo y solo comprueba unicidad si el nombre **cambió** → aplica setters **solo de los campos que llegaron** → `UPDATE` **dinámico** (solo esas columnas, valores de `aFilaBaseDatos()`) → reconsulta con `obtenerPorId`, igual que el ejemplo. |
+| `cambiarEstado(id, estado)` | existe → `exigirValorDeLista` con los valores de `ESTADO` → `rol.activar()` / `rol.desactivar()` → `UPDATE` solo de `estado` → **devuelve la misma instancia en memoria** (no se re-lee). |
+| `eliminar(id)` | existe → `DELETE`; `rol_permiso` cae por `ON DELETE CASCADE`; si el rol tiene usuarios, MySQL responde `ER_ROW_IS_REFERENCED` → 409. Devuelve `{ id, nombreRol, permisosLiberados }` en lugar de 204, para que en las pruebas **se vea** qué se borró. |
 | `asignarPermiso(idRol, idPermiso)` | valida que `idPermiso` sea entero ≥ 1 **antes** de abrir la transacción → `conTransaccion`: ¿existe el rol? ¿existe el permiso? ¿ya estaba asignado? (409 con mensaje propio en vez del `ER_DUP_ENTRY` genérico) → `INSERT` en la puente → fuera de la transacción, reconsulta el rol completo para devolver `totalPermisos` actualizado. **No mira el estado del rol**: un rol `inactivo` puede seguir recibiendo permisos. |
 | `quitarPermiso(idRol, idPermiso)` | todo dentro de **una** transacción: rol existe → estaba asignado (si no, 404) → **cuenta** los permisos; si `total <= SEGURIDAD.MINIMO_PERMISOS_ROL` (1) → `throw AppError.conflicto(ROL_SIN_PERMISOS)` y no se toca nada → `DELETE` → relee los permisos restantes **dentro de la misma transacción** y los devuelve como arreglo. |
-| `#validar(entrada)` (privado) | `ColectorErrores`: `nombreRol` requerido (≤ 50), `descripcion` opcional (≤ 255), `estado` solo si vino → `lanzarSiHayErrores()` → devuelve `Rol.desdeJSON` con lo ya limpio. |
+| `#validar(entrada)` (privado) | `ColectorErrores`: `nombreRol` requerido (≤ 50), `descripcion` opcional (≤ 255), `estado` solo si vino → `lanzarSiHayErrores()` → devuelve un **objeto plano** ya limpio; la instancia la construye `crear()` con `Rol.desdeJSON()` (validar y fabricar quedan separados, como en el ejemplo). |
 | `#asegurarNombreUnico(nombre, idExcluido)` (privado) | busca el nombre en otra fila → 409 `ROL_DUPLICADO`. Es **comodidad, no seguridad**: la protección real la da el `UNIQUE` de la columna (y, en una carrera entre dos peticiones, el traductor de MySQL). `idExcluido ?? -1` permite usarlo también en el UPDATE. |
 
 ### 10.2 `permiso.service.js`
@@ -594,14 +615,33 @@ pero **sin** sub-recurso: los permisos no se asignan aquí, sino desde
 `rol.service.asignarPermiso`. Campos permitidos: `nombrePermiso`,
 `descripcion`, `estado`. El listado admite `estado` y `busqueda`.
 
+Mismo tratamiento que en roles: `#validar` devuelve objeto plano, `crear`
+construye el `Permiso` con `desdeJSON` y **devuelve la instancia con su id**
+(la tabla no tiene `fecha_creacion`, así que no se setea nada más),
+`actualizar` usa setters + `UPDATE` dinámico y relee al final, `cambiarEstado`
+devuelve la instancia en memoria y `eliminar` devuelve
+`{ id, nombrePermiso }`.
+
 ### 10.3 `usuario.service.js`
 
 Diferencias importantes respecto a los otros dos:
 
 - **Contraseña**: en `crear` hace
-  `datosNormalizados.contrasenaHash = await cifrado.hashearPassword(...)` y
-  mete el hash en el `INSERT`; en `actualizar`, solo si vino una contraseña
-  nueva, vuelve a hashear. Nunca se guarda ni se devuelve en claro.
+  `contrasenaHash = await cifrado.hashearPassword(...)` y la pasa ya
+  hasheada a `Usuario.desdeJSON({ ..., contrasenaHash })` (la clave en
+  claro jamás llega al modelo); el hash entra al `INSERT` salido de
+  `aFilaBaseDatos()`. En `actualizar`, solo si vino una contraseña
+  nueva, se setea `usuario.contrasenaHash` y el hash viaja **en el mismo
+  `UPDATE` dinámico** (ya no hay un segundo `UPDATE` aparte). Nunca se
+  guarda ni se devuelve en claro.
+- **`crear` devuelve la instancia** (con `id = insertId` y
+  `fechaCreacion = fechas.ahoraISO()`), sin re-leer: como esa instancia
+  no pasa por el `INNER JOIN`, la respuesta del `POST /api/usuarios` **no
+  trae `nombreRol`**; todos los `GET`, el `PUT` y el `PATCH` sí lo traen.
+- **`eliminar`** devuelve `{ id, nombreCompleto, email }` (mismo estilo
+  que el ejemplo: llave `id`, sin `mensaje`) y responde
+  `USUARIO_EN_USO` si el usuario tiene historial (accesos, bitácora), en
+  lugar de dejar que la FK reviente.
 - **Validación condicional**: `#validar(entrada, { esCreacion, traeContrasena })`
   exige contraseña solo en la creación (o cuando se envía una nueva) y aplica
   la regla *8+ caracteres, letra y número*.
@@ -611,8 +651,6 @@ Diferencias importantes respecto a los otros dos:
 - **Consultas con `INNER JOIN roles`**: como `id_rol` es NOT NULL, el JOIN
   nunca pierde filas y el listado puede mostrar el nombre del rol y filtrar por
   `?idRol=5`.
-- **`eliminar`** devuelve `USUARIO_EN_USO` si el usuario tiene historial
-  (accesos, bitácora), en lugar de dejar que la FK reviente.
 
 ---
 

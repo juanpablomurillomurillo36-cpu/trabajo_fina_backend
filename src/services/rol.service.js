@@ -30,6 +30,7 @@ const MENSAJES = require('../utils/mensajes');
 const { Rol, Permiso } = require('../models');
 const { ColectorErrores } = require('../utils/validadores');
 const { ESTADO, LIMITES, SEGURIDAD } = require('../utils/constants');
+const fechas = require('../utils/fechas');
 const {
   limpiarTexto,
   soloCamposPermitidos,
@@ -68,6 +69,16 @@ const SQL_PERMISOS_DEL_ROL = `
 
 class RolService {
   #camposPermitidos = ['nombreRol', 'descripcion', 'estado'];
+
+  /**
+   * Traduce cada campo del body a su columna real, para el UPDATE
+   * DINAMICO: solo se escribe lo que llego, con el nombre correcto.
+   */
+  #mapaColumnas = {
+    nombreRol: 'nombre_rol',
+    descripcion: 'descripcion',
+    estado: 'estado'
+  };
 
   // =================================================================
   // LISTADO
@@ -180,22 +191,37 @@ class RolService {
    * Crea un rol nuevo.
    *
    * @param {object} datos  req.body con nombreRol, descripcion, estado.
-   * @returns {Promise<Rol>}
+   * @returns {Promise<Rol>} El rol construido aqui, ya con su id y su
+   *          fechaCreacion: se devuelve la INSTANCIA sin re-leer la
+   *          fila (mismo estilo que el ejemplo).
    * @throws {AppError} 400 datos invalidos, 409 nombre duplicado.
    */
   async crear(datos) {
     const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
 
-    const rol = this.#validar(entrada);
+    const normalizados = this.#validar(entrada);
 
-    await this.#asegurarNombreUnico(rol.nombreRol, null);
+    await this.#asegurarNombreUnico(normalizados.nombreRol, null);
+
+    // 1. Instanciar el objeto del dominio.
+    const rol = Rol.desdeJSON(normalizados);
+
+    // La fecha la pone el service (misma maquina que MySQL, cuyo
+    // DEFAULT CURRENT_TIMESTAMP rellena la columna).
+    rol.fechaCreacion = fechas.ahoraISO();
+
+    // 2. Persistir: aFilaBaseDatos() traduce el objeto a columnas.
+    const fila = rol.aFilaBaseDatos();
 
     const resultado = await db.ejecutar(
       'INSERT INTO roles (nombre_rol, descripcion, estado) VALUES (?, ?, ?)',
-      [rol.nombreRol, rol.descripcion, rol.estado]
+      [fila.nombre_rol, fila.descripcion, fila.estado]
     );
 
-    return this.obtenerPorId(resultado.insertId);
+    // El id lo asigna el SETTER, igual que en el ejemplo.
+    rol.id = resultado.insertId;
+
+    return rol;
   }
 
   // =================================================================
@@ -207,10 +233,12 @@ class RolService {
    *
    * @param {number} id
    * @param {object} datos
-   * @returns {Promise<Rol>}
+   * @returns {Promise<Rol>} El rol releido al final, igual que el
+   *          ejemplo (`return this.obtenerPorId(id)`).
    */
   async actualizar(id, datos) {
-    const existente = await this.obtenerPorId(id);
+    // 1. Verificar que exista. Si no, obtenerPorId lanza el 404.
+    const rol = await this.obtenerPorId(id);
 
     const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
 
@@ -221,23 +249,53 @@ class RolService {
       );
     }
 
+    // 2. Normalizar y validar el conjunto COMPLETO: se parte del
+    //    registro existente y se pisan solo los campos que llegaron,
+    //    asi las validaciones siempre ven todos los valores.
     const paraValidar = {
-      nombreRol: entrada.nombreRol ?? existente.nombreRol,
-      descripcion: entrada.descripcion ?? existente.descripcion,
-      estado: entrada.estado ?? existente.estado
+      nombreRol: entrada.nombreRol ?? rol.nombreRol,
+      descripcion: entrada.descripcion ?? rol.descripcion,
+      estado: entrada.estado ?? rol.estado
     };
 
-    const rol = this.#validar(paraValidar);
+    const normalizados = this.#validar(paraValidar);
 
-    if (rol.nombreRol !== existente.nombreRol) {
-      await this.#asegurarNombreUnico(rol.nombreRol, id);
+    // Solo se revisa la unicidad si el nombre cambio; comprobarlo
+    // aunque fuera igual generaria una consulta inutil en cada PUT.
+    if (normalizados.nombreRol !== rol.nombreRol) {
+      await this.#asegurarNombreUnico(normalizados.nombreRol, id);
     }
 
-    await db.ejecutar(
-      'UPDATE roles SET nombre_rol = ?, descripcion = ?, estado = ? WHERE id_rol = ?',
-      [rol.nombreRol, rol.descripcion, rol.estado, id]
-    );
+    // 3. Aplicar los cambios AL OBJETO usando sus SETTERS.
+    for (const campo of Object.keys(entrada)) {
+      rol[campo] = normalizados[campo];
+    }
 
+    // 4. UPDATE DINAMICO: solo las columnas que efectivamente
+    //    cambiaron, con sus valores salidos de aFilaBaseDatos().
+    const fila = rol.aFilaBaseDatos();
+    const asignaciones = [];
+    const parametros = [];
+
+    for (const campo of Object.keys(entrada)) {
+      const columna = this.#mapaColumnas[campo];
+      if (!columna) continue;
+
+      asignaciones.push(`${columna} = ?`);
+      parametros.push(fila[columna]);
+    }
+
+    if (asignaciones.length > 0) {
+      parametros.push(id);
+
+      await db.ejecutar(
+        `UPDATE roles SET ${asignaciones.join(', ')} WHERE id_rol = ?`,
+        parametros
+      );
+    }
+
+    // Se relee al final: la respuesta refleja lo guardado (y trae los
+    // permisos actualizados), como en el ejemplo.
     return this.obtenerPorId(id);
   }
 
@@ -254,18 +312,26 @@ class RolService {
    *
    * @param {number} id
    * @param {string} estado
-   * @returns {Promise<Rol>}
+   * @returns {Promise<Rol>} La MISMA instancia con el estado ya
+   *          cambiado (no se re-lee la fila), como en el ejemplo.
    */
   async cambiarEstado(id, estado) {
-    await this.obtenerPorId(id);
+    const rol = await this.obtenerPorId(id);
 
     const errores = new ColectorErrores();
     errores.exigirValorDeLista('estado', estado, Object.values(ESTADO));
     errores.lanzarSiHayErrores();
 
-    await db.ejecutar('UPDATE roles SET estado = ? WHERE id_rol = ?', [estado, id]);
+    // El objeto decide como representar su propio estado.
+    if (estado === ESTADO.ACTIVO) {
+      rol.activar();
+    } else {
+      rol.desactivar();
+    }
 
-    return this.obtenerPorId(id);
+    await db.ejecutar('UPDATE roles SET estado = ? WHERE id_rol = ?', [rol.estado, id]);
+
+    return rol;
   }
 
   // =================================================================
@@ -281,7 +347,9 @@ class RolService {
    * ER_ROW_IS_REFERENCED y el middleware la traduce a 409.
    *
    * @param {number} id
-   * @returns {Promise<object>}
+   * @returns {Promise<object>} Resumen en el MISMO estilo que el
+   *          ejemplo: llave `id` y sin campo `mensaje`.
+   * @throws {AppError} 404 si no existe.
    */
   async eliminar(id) {
     const existente = await this.obtenerPorId(id);
@@ -289,10 +357,9 @@ class RolService {
     await db.ejecutar('DELETE FROM roles WHERE id_rol = ?', [id]);
 
     return {
-      idEliminado: existente.id,
+      id: existente.id,
       nombreRol: existente.nombreRol,
-      permisosLiberados: existente.totalPermisos,
-      mensaje: 'Rol eliminado junto con sus asignaciones de permisos'
+      permisosLiberados: existente.totalPermisos
     };
   }
 
@@ -431,10 +498,14 @@ class RolService {
   // ================================================================
 
   /**
-   * Valida los campos de un rol y devuelve la instancia.
+   * Valida los campos de un rol y devuelve un objeto PLANO ya limpio.
+   *
+   * Devuelve un objeto normalizado (no una instancia): quien persiste
+   * es `crear()`, que construye el Rol con `Rol.desdeJSON(...)`. Asi
+   * validacion y fabricacion quedan separadas, como en el ejemplo.
    *
    * @param {object} entrada
-   * @returns {Rol}
+   * @returns {object}
    * @throws {AppError} 400 con el detalle campo a campo.
    */
   #validar(entrada) {
@@ -453,14 +524,14 @@ class RolService {
 
     errores.lanzarSiHayErrores();
 
-    return Rol.desdeJSON({
+    return {
       nombreRol: String(entrada.nombreRol).trim(),
       descripcion:
         entrada.descripcion === undefined || entrada.descripcion === null
           ? null
           : String(entrada.descripcion).trim(),
       estado: entrada.estado || ESTADO.ACTIVO
-    });
+    };
   }
 
   /**

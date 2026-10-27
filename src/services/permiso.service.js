@@ -49,6 +49,16 @@ class PermisoService {
    */
   #camposPermitidos = ['nombrePermiso', 'descripcion', 'estado'];
 
+  /**
+   * Traduce cada campo del body a su columna real, para el UPDATE
+   * DINAMICO: solo se escribe lo que llego, con el nombre correcto.
+   */
+  #mapaColumnas = {
+    nombrePermiso: 'nombre_permiso',
+    descripcion: 'descripcion',
+    estado: 'estado'
+  };
+
   // =================================================================
   // LISTADO
   // ================================================================
@@ -163,24 +173,35 @@ class PermisoService {
    * Valida y guarda un permiso nuevo.
    *
    * @param {object} datos  req.body.
-   * @returns {Promise<Permiso>} El permiso ya persistido (con id).
+   * @returns {Promise<Permiso>} El permiso construido aqui, ya con su
+   *          id: se devuelve la INSTANCIA sin re-leer la fila (mismo
+   *          estilo que el ejemplo).
    * @throws {AppError} 400 si los datos son invalidos, 409 si el
    *                    nombre ya existe.
    */
   async crear(datos) {
     const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
 
-    const permiso = this.#validar(entrada);
+    const normalizados = this.#validar(entrada);
 
-    await this.#asegurarNombreUnico(permiso.nombrePermiso, null);
+    await this.#asegurarNombreUnico(normalizados.nombrePermiso, null);
+
+    // 1. Instanciar el objeto del dominio.
+    const permiso = Permiso.desdeJSON(normalizados);
+
+    // 2. Persistir: aFilaBaseDatos() traduce el objeto a columnas.
+    const fila = permiso.aFilaBaseDatos();
 
     const resultado = await db.ejecutar(
       'INSERT INTO permisos (nombre_permiso, descripcion, estado) VALUES (?, ?, ?)',
-      [permiso.nombrePermiso, permiso.descripcion, permiso.estado]
+      [fila.nombre_permiso, fila.descripcion, fila.estado]
     );
 
-    // insertId lo devuelve mysql2 en los metadatos del INSERT.
-    return this.obtenerPorId(resultado.insertId);
+    // insertId lo devuelve mysql2 en los metadatos del INSERT; el id
+    // lo asigna el SETTER, igual que en el ejemplo.
+    permiso.id = resultado.insertId;
+
+    return permiso;
   }
 
   // =================================================================
@@ -194,11 +215,13 @@ class PermisoService {
    *
    * @param {number} id
    * @param {object} datos
-   * @returns {Promise<Permiso>}
+   * @returns {Promise<Permiso>} El permiso releido al final, igual que
+   *          el ejemplo (`return this.obtenerPorId(id)`).
    * @throws {AppError} 404, 400 o 409.
    */
   async actualizar(id, datos) {
-    const existente = await this.obtenerPorId(id);
+    // 1. Verificar que exista. Si no, obtenerPorId lanza el 404.
+    const permiso = await this.obtenerPorId(id);
 
     const entrada = soloCamposPermitidos(datos, this.#camposPermitidos);
 
@@ -209,26 +232,50 @@ class PermisoService {
       );
     }
 
-    // Se parte del registro EXISTENTE y se pisan solo los campos que
-    // llegaron: asi las validaciones siempre ven el conjunto completo.
+    // 2. Normalizar y validar el conjunto COMPLETO: se parte del
+    //    registro EXISTENTE y se pisan solo los campos que llegaron,
+    //    asi las validaciones siempre ven el conjunto completo.
     const paraValidar = {
-      nombrePermiso: entrada.nombrePermiso ?? existente.nombrePermiso,
-      descripcion: entrada.descripcion ?? existente.descripcion,
-      estado: entrada.estado ?? existente.estado
+      nombrePermiso: entrada.nombrePermiso ?? permiso.nombrePermiso,
+      descripcion: entrada.descripcion ?? permiso.descripcion,
+      estado: entrada.estado ?? permiso.estado
     };
 
-    const permiso = this.#validar(paraValidar);
+    const normalizados = this.#validar(paraValidar);
 
     // Solo se revisa la unicidad si el nombre cambio; comprobarlo
     // aunque fuera igual generaria una consulta inutil en cada PUT.
-    if (permiso.nombrePermiso !== existente.nombrePermiso) {
-      await this.#asegurarNombreUnico(permiso.nombrePermiso, id);
+    if (normalizados.nombrePermiso !== permiso.nombrePermiso) {
+      await this.#asegurarNombreUnico(normalizados.nombrePermiso, id);
     }
 
-    await db.ejecutar(
-      'UPDATE permisos SET nombre_permiso = ?, descripcion = ?, estado = ? WHERE id_permiso = ?',
-      [permiso.nombrePermiso, permiso.descripcion, permiso.estado, id]
-    );
+    // 3. Aplicar los cambios AL OBJETO usando sus SETTERS.
+    for (const campo of Object.keys(entrada)) {
+      permiso[campo] = normalizados[campo];
+    }
+
+    // 4. UPDATE DINAMICO: solo las columnas que efectivamente
+    //    cambiaron, con sus valores salidos de aFilaBaseDatos().
+    const fila = permiso.aFilaBaseDatos();
+    const asignaciones = [];
+    const parametros = [];
+
+    for (const campo of Object.keys(entrada)) {
+      const columna = this.#mapaColumnas[campo];
+      if (!columna) continue;
+
+      asignaciones.push(`${columna} = ?`);
+      parametros.push(fila[columna]);
+    }
+
+    if (asignaciones.length > 0) {
+      parametros.push(id);
+
+      await db.ejecutar(
+        `UPDATE permisos SET ${asignaciones.join(', ')} WHERE id_permiso = ?`,
+        parametros
+      );
+    }
 
     return this.obtenerPorId(id);
   }
@@ -243,18 +290,29 @@ class PermisoService {
    *
    * @param {number} id
    * @param {string} estado  'activo' | 'inactivo'
-   * @returns {Promise<Permiso>}
+   * @returns {Promise<Permiso>} La MISMA instancia con el estado ya
+   *          cambiado (no se re-lee la fila), como en el ejemplo.
    */
   async cambiarEstado(id, estado) {
-    await this.obtenerPorId(id); // 404 si no existe
+    const permiso = await this.obtenerPorId(id); // 404 si no existe
 
     const errores = new ColectorErrores();
     errores.exigirValorDeLista('estado', estado, Object.values(ESTADO));
     errores.lanzarSiHayErrores();
 
-    await db.ejecutar('UPDATE permisos SET estado = ? WHERE id_permiso = ?', [estado, id]);
+    // El objeto decide como representar su propio estado.
+    if (estado === ESTADO.ACTIVO) {
+      permiso.activar();
+    } else {
+      permiso.desactivar();
+    }
 
-    return this.obtenerPorId(id);
+    await db.ejecutar('UPDATE permisos SET estado = ? WHERE id_permiso = ?', [
+      permiso.estado,
+      id
+    ]);
+
+    return permiso;
   }
 
   // =================================================================
@@ -271,7 +329,8 @@ class PermisoService {
    * rechazar nada con 409.
    *
    * @param {number} id
-   * @returns {Promise<{idEliminado:number, mensaje:string}>}
+   * @returns {Promise<object>} Resumen en el MISMO estilo que el
+   *          ejemplo: llave `id` y sin campo `mensaje`.
    * @throws {AppError} 404 si no existe.
    */
   async eliminar(id) {
@@ -280,9 +339,8 @@ class PermisoService {
     await db.ejecutar('DELETE FROM permisos WHERE id_permiso = ?', [id]);
 
     return {
-      idEliminado: existente.id,
-      nombrePermiso: existente.nombrePermiso,
-      mensaje: 'Permiso eliminado junto con sus asignaciones a roles'
+      id: existente.id,
+      nombrePermiso: existente.nombrePermiso
     };
   }
 
@@ -291,14 +349,18 @@ class PermisoService {
   // ================================================================
 
   /**
-   * Valida una tanda de campos y devuelve un objeto Permiso listo.
+   * Valida una tanda de campos y devuelve un objeto PLANO ya limpio.
    *
    * Se hace en un solo paso porque el ColectorErrores junta TODOS los
    * problemas y los lanza de una sola vez, en vez de devolver un
    * error cada vez.
    *
+   * Devuelve un objeto normalizado (no una instancia): quien persiste
+   * es `crear()`, que construye el Permiso con `Permiso.desdeJSON(...)`.
+   * Asi validacion y fabricacion quedan separadas, como en el ejemplo.
+   *
    * @param {object} entrada
-   * @returns {Permiso}
+   * @returns {object}
    * @throws {AppError} 400 con el detalle campo a campo.
    */
   #validar(entrada) {
@@ -319,17 +381,16 @@ class PermisoService {
 
     errores.lanzarSiHayErrores();
 
-    // normalizar con el modelo (trim) y no con limpiarTexto del
-    // service, para que el resultado sea identico venga de donde
-    // venga: mismo objeto, misma normalizacion.
-    return Permiso.desdeJSON({
+    // normalizacion identica a la del modelo (trim), para que el
+    // resultado sea el mismo venga de donde venga.
+    return {
       nombrePermiso: String(entrada.nombrePermiso).trim(),
       descripcion:
         entrada.descripcion === undefined || entrada.descripcion === null
           ? null
           : String(entrada.descripcion).trim(),
       estado: entrada.estado || ESTADO.ACTIVO
-    });
+    };
   }
 
   /**
